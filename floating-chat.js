@@ -5,7 +5,7 @@ const CHAT_API_ENDPOINT = "https://your-worker.workers.dev";
 class UniversalChatWidget {
   constructor(options = {}) {
     this.options = {
-      title: options.title || "💬 AI Assistant",
+      title: options.title || "AI Assistant",
       subtitle: options.subtitle || "Powered by AI",
       welcomeMessage:
         options.welcomeMessage || "Hello! How can I help you today?",

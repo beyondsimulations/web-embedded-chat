@@ -1,58 +1,51 @@
-# OpenWebUI Embedded Chat Widget
+# Universal AI Chat Widget
 
-A floating chat widget that integrates with OpenWebUI to provide AI-powered assistance on educational websites and documentation sites. Perfect for course materials, tutorials, and interactive learning platforms.
+A simple, floating chat widget that works with any OpenAI-compatible API. Perfect for adding AI assistance to your website with minimal setup.
 
 ## Features
 
-- 🎨 **Customizable Appearance**: Modern color palette with full customization options and flexible positioning
-- **Persistent Sessions**: Maintains chat history across page reloads
-- **Responsive Design**: Works seamlessly on desktop and mobile devices
-- **Smart Notifications**: Unread message badges and preview popups
-- **Real-time Typing**: Shows typing indicators for better UX
-- **Secure Backend**: Cloudflare Worker proxy with CORS protection
-- **Easy Integration**: Simple JavaScript configuration for any website
+- **Universal API Support**: Works with any OpenAI-compatible API (OpenAI, Anthropic, OpenWebUI, Ollama, Azure OpenAI, etc.)
+- **Customizable Appearance**: Easy color customization and flexible positioning
+- **Persistent Chat History**: Maintains conversations across page reloads
+- **Responsive Design**: Works on desktop and mobile
+- **Real-time Typing Indicators**: Better user experience
+- **Secure**: Cloudflare Worker proxy keeps API keys safe
+- **Easy Setup**: Just two files and minimal configuration
 
 ## Quick Start
 
 ### 1. Deploy the Cloudflare Worker
 
-1. **Create a Cloudflare Worker**:
-   - Go to [Cloudflare Workers](https://workers.cloudflare.com/)
-   - Create a new Worker
-   - Replace the default code with the contents of `cloudflare-worker.js`
-
-2. **Configure Environment Variables** in your Cloudflare Worker:
+1. Go to [Cloudflare Workers](https://workers.cloudflare.com/)
+2. Create a new Worker
+3. Replace the default code with the contents of `cloudflare-worker.js`
+4. Set these environment variables:
    ```
-   OPENWEBUI_ENDPOINT=https://your-openwebui-instance.com/api/chat/completions
-   OPENWEBUI_API_KEY=your-openwebui-api-key
-   OPENWEBUI_MODEL=llama3.2:latest (optional)
-   SYSTEM_PROMPT=Your custom system prompt (optional)
+   API_ENDPOINT=https://api.openai.com/v1/chat/completions
+   API_KEY=your-api-key-here
+   MODEL=gpt-3.5-turbo
+   SYSTEM_PROMPT=You are a helpful assistant.
    ```
-
-3. **Update CORS Origins** in `cloudflare-worker.js`:
+5. Update the allowed domains in the worker code:
    ```javascript
-   const allowedOrigins = [
-     "https://yourdomain.com",
-     "https://*.yourdomain.com",
-     "http://localhost:3000", // For local development
+   const allowedDomains = [
+     "yourdomain.com",
+     "github.io",
+     "localhost"
    ];
    ```
+6. Deploy and note your Worker URL
 
-4. **Deploy the Worker** and note your Worker URL (e.g., `https://your-worker.your-subdomain.workers.dev`)
+### 2. Add to Your Website
 
-### 2. Configure the Frontend
-
-1. **Update the API Endpoint** in `floating-chat.js`:
+1. Download `floating-chat.js`
+2. Update the API endpoint at the top of the file:
    ```javascript
-   const CHAT_API_ENDPOINT = "https://your-worker.your-subdomain.workers.dev";
+   const CHAT_API_ENDPOINT = "https://your-worker.workers.dev";
    ```
+3. Add to your HTML:
 
-2. **Host the JavaScript Files** on your website or CDN
-
-### 3. Add to Your Website
-
-#### Option A: Direct HTML Integration
-
+#### Manual Initialization
 ```html
 <!DOCTYPE html>
 <html>
@@ -61,188 +54,177 @@ A floating chat widget that integrates with OpenWebUI to provide AI-powered assi
 </head>
 <body>
     <!-- Your content here -->
-
-    <!-- Add the chat widget -->
-    <script src="/path/to/floating-chat.js"></script>
+    
+    <script src="floating-chat.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            new FloatingChatWidget({
-                title: 'Course Assistant',
-                subtitle: 'Ask me anything!',
-                position: 'bottom-right',
-                startOpen: false,
-                // Custom colors
-                colors: {
-                    primary: '#003d82', //  blue
-                    accent: '#ffd100', //  gold
-                }
-            });
+        new UniversalChatWidget({
+            title: 'AI Assistant',
+            subtitle: 'Ask me anything!',
+            primaryColor: '#3b82f6'
         });
     </script>
 </body>
 </html>
 ```
 
-#### Option B: Quarto Integration
+#### Auto-Initialization
+Alternatively, use the `data-chat-widget` attribute for automatic initialization:
 
-Add to your `_quarto.yml`:
-
-```yaml
-format:
-  html:
-    include-after-body:
-      - text: |
-          <script src="/floating-chat.js"></script>
-          <script>
-            document.addEventListener('DOMContentLoaded', () => {
-              new FloatingChatWidget({
-                  title: 'Course Helper',
-                  // Uses modern default colors
-              });
-            });
-          </script>
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Your Page</title>
+</head>
+<body data-chat-widget='{"title": "AI Assistant", "primaryColor": "#3b82f6"}'>
+    <!-- Your content here -->
+    
+    <script src="floating-chat.js"></script>
+    <!-- Widget initializes automatically -->
+</body>
+</html>
 ```
-
-Or use the configuration file approach shown in `configuration.js`.
 
 ## Configuration Options
 
-### Widget Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `title` | String | "💬 Course Assistant" | Chat window title |
-| `subtitle` | String | "Ask me anything!" | Subtitle text |
-| `welcomeMessage` | String | "Hello! How can I help..." | Initial message |
-| `placeholder` | String | "Type your question..." | Input placeholder |
-| `position` | String | "bottom-right" | Widget position (`bottom-right`, `bottom-left`, `top-right`, `top-left`) |
-| `colors` | Object | Modern palette | Custom color configuration (see color options below) |
-| `startOpen` | Boolean | false | Open automatically on page load |
-| `buttonSize` | Number | 60 | Size of the floating button in pixels |
-| `windowWidth` | Number | 380 | Chat window width in pixels |
-| `windowHeight` | Number | 600 | Chat window height in pixels |
-
-### Color Customization
-
-The widget uses a modern color palette by default. You can override any colors:
-
-| Color | Default | Purpose |
-|-------|---------|---------|
-| `primary` | "#0f6466" | Main brand color (button, header, user messages) |
-| `secondary` | "#fdcd9a" | Secondary accent color |
-| `tertiary` | "#d99f7e" | Tertiary accent color |
-| `quaternary` | "#99bfbb" | Borders and subtle elements |
-| `accent` | "#df7d7d" | Highlight color |
-| `code` | "#F2F0F2" | Code block backgrounds |
-| `codeline` | "#BF4D34" | Code text color |
-| `darker` | "#2c3532" | Dark text and backgrounds |
-| `lighter` | "#ffffff" | Light backgrounds and text |
-
-### Example Configurations
-
-**Educational Site**:
+### Basic Options
 ```javascript
-new FloatingChatWidget({
-    title: 'Study Assistant',
-    subtitle: 'Available 24/7',
-    welcomeMessage: 'Hi! I can help explain course concepts and answer questions.',
-    placeholder: 'Ask about the course material...',
-    // Uses modern default colors
+new UniversalChatWidget({
+    // Text
+    title: 'AI Assistant',
+    subtitle: 'Powered by AI',
+    welcomeMessage: 'Hello! How can I help you today?',
+    placeholder: 'Type your question...',
+    
+    // Appearance
+    primaryColor: '#3b82f6',           // Main color (button, user messages)
+    secondaryColor: '#1d4ed8',         // Optional gradient color
+    textColor: '#ffffff',              // Text on colored backgrounds
+    backgroundColor: '#ffffff',        // Chat background
+    userMessageColor: null,            // Defaults to primaryColor
+    assistantMessageColor: '#ffffff',  // AI message background
+    assistantBorderColor: '#e5e7eb',  // AI message border
+    
+    // Behavior
+    position: 'bottom-right',          // bottom-right, bottom-left, top-right, top-left
+    startOpen: false,                  // Open automatically
+    buttonSize: 60,                    // Button size in pixels
+    windowWidth: 380,                  // Chat window width
+    windowHeight: 600,                 // Chat window height
+    showModelInfo: false,              // Show model info in chat
+    debug: false,                      // Enable debug logging
 });
 ```
 
-**Documentation Site**:
+## API Provider Examples
+
+### OpenAI
+```
+API_ENDPOINT=https://api.openai.com/v1/chat/completions
+API_KEY=sk-your-openai-key
+MODEL=gpt-3.5-turbo
+```
+
+### Anthropic Claude
+```
+API_ENDPOINT=https://api.anthropic.com/v1/messages
+API_KEY=sk-ant-your-key
+MODEL=claude-3-sonnet-20240229
+```
+
+### OpenWebUI
+```
+API_ENDPOINT=https://your-openwebui.com/api/chat/completions
+API_KEY=your-openwebui-key
+MODEL=llama3.2:latest
+```
+
+### Ollama (Local)
+```
+API_ENDPOINT=http://localhost:11434/api/chat
+API_KEY=not-required
+MODEL=llama3.2:latest
+```
+
+### Azure OpenAI
+```
+API_ENDPOINT=https://your-resource.openai.azure.com/openai/deployments/your-model/chat/completions?api-version=2024-02-15-preview
+API_KEY=your-azure-key
+MODEL=gpt-35-turbo
+```
+
+## Example Configurations
+
+### Educational Site
 ```javascript
-new FloatingChatWidget({
-    title: 'API Helper',
-    subtitle: 'Documentation Assistant',
+new UniversalChatWidget({
+    title: 'Study Helper',
+    subtitle: 'Get help with your coursework',
+    primaryColor: '#059669',
+    welcomeMessage: 'Hi! I can help explain concepts, solve problems, and answer questions about your studies.'
+});
+```
+
+### Documentation Site
+```javascript
+new UniversalChatWidget({
+    title: 'Doc Assistant',
+    subtitle: 'Ask about our docs',
+    primaryColor: '#7c3aed',
     position: 'bottom-left',
-    welcomeMessage: 'Need help with the API? I can assist with code examples and explanations.',
-    colors: {
-        primary: '#1a1a2e', // Dark blue
-        quaternary: '#16213e', // Darker borders
-        lighter: '#f8f9fa', // Clean white
-    }
+    welcomeMessage: 'Need help navigating our documentation? Ask me anything!'
 });
 ```
 
-## OpenWebUI Setup
-
-### Prerequisites
-
-1. **Running OpenWebUI Instance**: You need a deployed OpenWebUI instance with API access
-2. **API Key**: Generate an API key from your OpenWebUI admin panel
-3. **Model Access**: Ensure your chosen model is available and loaded
-
-## Customization
-
-### Styling
-
-The widget uses CSS custom properties that you can override:
-
-```css
-/* Override specific colors globally */
-:root {
-    --chat-primary: #your-brand-color;
-    --chat-accent: #your-accent-color;
-}
-```
-
-Or customize colors through the JavaScript configuration:
-
+### Corporate Site
 ```javascript
-new FloatingChatWidget({
-    colors: {
-        primary: '#your-brand-color',
-        secondary: '#your-secondary',
-        // Only override the colors you want to change
-    }
+new UniversalChatWidget({
+    title: 'Support',
+    subtitle: 'How can we help?',
+    primaryColor: '#dc2626',
+    secondaryColor: '#991b1b',
+    backgroundColor: '#f9fafb'
 });
 ```
 
-### System Prompts
+## Development
 
-Customize the AI behavior by setting the `SYSTEM_PROMPT` environment variable:
+### Local Testing
+1. Start a local web server: `python -m http.server 3000`
+2. Add `localhost` to your worker's allowed domains
+3. Open `http://localhost:3000` and test
 
+### File Structure
 ```
-You are a helpful course assistant for a computer science program.
-Focus on helping students understand concepts rather than giving direct answers.
-Ask clarifying questions and guide them to discover solutions.
-```
-
-## Security Considerations
-
-- **CORS Protection**: Configurable allowed origins
-- **Input Validation**: Message length and format validation
-- **Rate Limiting**: Implement rate limiting in your OpenWebUI instance
-- **API Key Security**: Environment variables keep keys secure
-- **Domain Restrictions**: Always configure `allowedOrigins` for production
-
-### Debug Mode
-
-Enable debug logging by adding to your configuration:
-
-```javascript
-new FloatingChatWidget({
-    // ... other options
-    debug: true  // Enables console logging
-});
+├── floating-chat.js      # Main widget (client-side)
+├── cloudflare-worker.js  # API proxy (server-side)
+├── configuration.js      # Example configurations
+└── README.md            # This file
 ```
 
-## Contributing
+## Troubleshooting
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+**Widget doesn't appear**: Check browser console for errors, verify script path is correct
+
+**API errors**: 
+- Verify your Worker URL in `CHAT_API_ENDPOINT`
+- Check environment variables in Cloudflare Workers dashboard
+- Confirm API key is valid and has credits
+- Make sure your domain is in the `allowedDomains` list
+
+**CORS issues**: Add your domain to the `allowedDomains` array in the worker code
+
+## Security
+
+- API keys are stored securely in Cloudflare Workers environment variables
+- CORS protection limits which domains can use your worker
+- Input validation prevents oversized messages
+- No API keys or sensitive data in client-side code
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built for integration with [OpenWebUI](https://github.com/open-webui/open-webui)
-- Designed for educational and documentation websites
-- Inspired by modern chat widget UX patterns
+MIT License - feel free to use this in your projects!
 
 ---
 
-**Need help?** Open an issue or check the [troubleshooting section](#troubleshooting) above.
+**Questions?** Open an issue on GitHub or check the troubleshooting section above.

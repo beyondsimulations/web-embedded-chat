@@ -1,62 +1,48 @@
 export default {
   async fetch(request, env) {
-    // Configure your allowed domains (supports wildcards)
-    const allowedOrigins = [
-      "https://yourusername.github.io",
-      "https://*.yourusername.github.io", // Allows subdomains
-      "https://yourusername.github.io/*", // Allows subdirectories
-      "http://localhost:4321",
-      "http://127.0.0.1:4321",
+    // Smart CORS: automatically allow subdomains and paths
+    const origin = request.headers.get("Origin") || "";
+
+    // Define your base domains (worker will allow all subdomains/paths)
+    const allowedDomains = [
+      "github.io", // Allows *.github.io/*
+      "localhost", // Allows localhost with any port
+      // Add your custom domain if you have one:
+      // 'yourdomain.com'  // Allows *.yourdomain.com/*
     ];
 
-    // Function to check if origin matches any allowed pattern
-    const isOriginAllowed = (origin, allowedOrigins) => {
-      return allowedOrigins.some((pattern) => {
-        if (pattern === origin) return true; // Exact match
+    // Check if origin matches any allowed domain
+    const isAllowed = allowedDomains.some((domain) => origin.includes(domain));
 
-        // Handle subdomain wildcards (*.domain.com)
-        if (pattern.includes("*.")) {
-          const regex = new RegExp("^" + pattern.replace(/\*/g, "[^.]+") + "$");
-          return regex.test(origin);
-        }
-
-        // Handle path wildcards (domain.com/*)
-        if (pattern.endsWith("/*")) {
-          const basePattern = pattern.slice(0, -2);
-          return origin === basePattern || origin.startsWith(basePattern + "/");
-        }
-
-        return false;
-      });
-    };
-
-    const origin = request.headers.get("Origin");
     const corsHeaders = {
-      "Access-Control-Allow-Origin": isOriginAllowed(origin, allowedOrigins)
+      "Access-Control-Allow-Origin": isAllowed
         ? origin
-        : allowedOrigins[0],
+        : "https://localhost:3000",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     };
 
+    // Handle preflight
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
 
+    // Only accept POST
     if (request.method !== "POST") {
-      return new Response("Method not allowed", {
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,
-        headers: corsHeaders,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     try {
       const body = await request.json();
 
-      if (!body.message || typeof body.message !== "string") {
+      // Basic validation
+      if (!body.message || body.message.length > 2000) {
         return new Response(
           JSON.stringify({
-            error: "Invalid message format",
+            error: "Invalid message",
           }),
           {
             status: 400,
@@ -65,56 +51,53 @@ export default {
         );
       }
 
-      if (body.message.length > 2000) {
-        return new Response(
-          JSON.stringify({
-            error: "Message too long (max 2000 characters)",
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
+      // Build messages array
+      const messages = [];
 
-      const messages = [
-        {
+      // Add system prompt if configured
+      if (env.SYSTEM_PROMPT) {
+        messages.push({
           role: "system",
-          content:
-            env.SYSTEM_PROMPT ||
-            "You are a helpful educational assistant. Be concise and clear. Guide students to understand concepts rather than just providing direct answers.",
-        },
-      ];
+          content: env.SYSTEM_PROMPT,
+        });
+      }
 
+      // Add conversation history (last 10 messages)
       if (body.history && Array.isArray(body.history)) {
         messages.push(...body.history.slice(-10));
       }
 
-      messages.push({ role: "user", content: body.message });
+      // Add current message
+      messages.push({
+        role: "user",
+        content: body.message,
+      });
 
-      const response = await fetch(env.OPENWEBUI_ENDPOINT, {
+      // Call OpenAI-compatible API
+      const response = await fetch(env.API_ENDPOINT, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${env.OPENWEBUI_API_KEY}`,
+          Authorization: `Bearer ${env.API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: env.OPENWEBUI_MODEL || "llama3.2:latest",
+          model: env.MODEL || "gpt-3.5-turbo",
           messages: messages,
-          stream: false,
-          max_tokens: 500,
           temperature: 0.7,
+          max_tokens: 500,
+          stream: false,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`API responded with status ${response.status}`);
+        throw new Error(`API error: ${response.status}`);
       }
 
       const data = await response.json();
+
+      // Standard OpenAI response format
       const assistantMessage =
-        data.choices?.[0]?.message?.content ||
-        "Sorry, I could not generate a response.";
+        data.choices?.[0]?.message?.content || "Sorry, no response generated.";
 
       return new Response(
         JSON.stringify({
@@ -125,10 +108,10 @@ export default {
         },
       );
     } catch (error) {
-      console.error("Worker error:", error);
+      console.error("Error:", error);
       return new Response(
         JSON.stringify({
-          error: "Service temporarily unavailable. Please try again.",
+          error: "Service temporarily unavailable",
         }),
         {
           status: 500,

@@ -6,7 +6,6 @@ class UniversalChatWidget {
   constructor(options = {}) {
     this.options = {
       title: options.title || "Course Assistant",
-      subtitle: options.subtitle || "Applied Optimization",
       welcomeMessage:
         options.welcomeMessage || "Hello! How can I help you today?",
       placeholder: options.placeholder || "Type your question...",
@@ -16,7 +15,7 @@ class UniversalChatWidget {
       primaryColor: options.primaryColor || "#99bfbb", // Main brand color (user messages, buttons)
       secondaryColor: options.secondaryColor || "#0f6466", // Hover states, focus rings, accents
       backgroundColor: options.backgroundColor || "#ffffff", // Window background
-      headerBackgroundColor: options.headerBackgroundColor || "#fdcd9a", // Header background (both title and subtitle rows)
+      headerBackgroundColor: options.headerBackgroundColor || "#7da3a0", // Header background (both title and subtitle rows)
 
       // Message styling
       userMessageColor: options.userMessageColor || "#99bfbb", // User message bubbles
@@ -25,10 +24,10 @@ class UniversalChatWidget {
 
       // Text colors
       textColor: options.textColor || "#ffffff", // Text on colored backgrounds (buttons)
-      headerTextColor: options.headerTextColor || "#1f2937", // Text in header (title and subtitle)
+      headerTextColor: options.headerTextColor || "#ffffff", // Text in header (title and subtitle)
       userTextColor: options.userTextColor || "#1f2937", // Text in user message bubbles
       assistantTextColor: options.assistantTextColor || "#1f2937", // Text in assistant message bubbles
-      mutedTextColor: options.mutedTextColor || "#6b7280", // Timestamps, secondary text
+      mutedTextColor: options.mutedTextColor || "#df7d7d", // Timestamps, secondary text
 
       // Behavior options
       startOpen: options.startOpen || false,
@@ -204,7 +203,7 @@ class UniversalChatWidget {
       .chat-header {
         background: ${headerBackgroundStyle};
         color: ${this.options.headerTextColor};
-        padding: 1.25rem;
+        padding: 1rem 1.25rem;
         border-radius: 4px 4px 0 0;
         display: flex;
         justify-content: space-between;
@@ -217,35 +216,27 @@ class UniversalChatWidget {
         font-weight: 600;
       }
 
-      .chat-header-info p {
-        margin: 0.25rem 0 0 0;
-        font-size: 0.85rem;
-        opacity: 0.9;
-      }
-
       .chat-header-actions {
         display: flex;
         gap: 0.5rem;
       }
 
       .chat-header-btn {
-        background: rgba(0, 0, 0, 0.1);
-        border: 1px solid ${this.options.messageBorderColor};
+        background: none;
+        border: none;
         color: ${this.options.headerTextColor};
-        width: 32px;
-        height: 32px;
-        border-radius: 4px;
+        width: 40px;
+        height: 40px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.2s;
-        font-size: 18px;
+        transition: opacity 0.2s;
+        font-size: 24px;
       }
 
       .chat-header-btn:hover {
-        background: rgba(0, 0, 0, 0.15);
-        border-color: ${this.options.secondaryColor};
+        opacity: 0.7;
       }
 
       /* Messages */
@@ -335,8 +326,12 @@ class UniversalChatWidget {
 
       /* Input Area */
       .chat-input-area {
-        padding: 1rem;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
         background: ${this.options.backgroundColor};
+        padding: 1rem;
         border-top: 1px solid #e5e7eb;
         border-radius: 0 0 4px 4px;
       }
@@ -496,7 +491,6 @@ class UniversalChatWidget {
       <div class="chat-header">
         <div class="chat-header-info">
           <h3>${this.options.title}</h3>
-          <p>${this.options.subtitle}</p>
         </div>
         <div class="chat-header-actions">
           <button class="chat-header-btn chat-clear-btn" title="Clear chat">↻</button>

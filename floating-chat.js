@@ -5,26 +5,38 @@ const CHAT_API_ENDPOINT = "https://your-worker.workers.dev";
 class UniversalChatWidget {
   constructor(options = {}) {
     this.options = {
-      title: options.title || "AI Assistant",
-      subtitle: options.subtitle || "Powered by AI",
+      title: options.title || "Course Assistant",
+      subtitle: options.subtitle || "Applied Optimization",
       welcomeMessage:
         options.welcomeMessage || "Hello! How can I help you today?",
       placeholder: options.placeholder || "Type your question...",
-      position: options.position || "bottom-right",
-      // Color customization with defaults
-      primaryColor: options.primaryColor || "#3b82f6", // Default blue
-      secondaryColor: options.secondaryColor || null, // Optional gradient color
+      position: options.position || "bottom-right", // bottom-right, bottom-left, top-right, top-left
+
+      // Main theme colors
+      primaryColor: options.primaryColor || "#0f6466", // Main brand color (header, user messages)
+      secondaryColor: options.secondaryColor || "#fdcd9a", // Hover states, focus rings, accents
+      backgroundColor: options.backgroundColor || "#ffffff", // Window background
+
+      // Message styling
+      userMessageColor: options.userMessageColor || "#ffffff", // User message bubbles
+      userBorderColor: options.userBorderColor || "#d99f7e", // Optional user message borders
+      assistantMessageColor: options.assistantMessageColor || "#df7d7d", // Assistant message bubbles
+      assistantBorderColor: options.assistantBorderColor || "#2c3532", // Assistant message borders
+
+      // Text colors
       textColor: options.textColor || "#ffffff", // Text on colored backgrounds
-      backgroundColor: options.backgroundColor || "#ffffff", // Chat background
-      userMessageColor: options.userMessageColor || null, // Defaults to primaryColor
-      assistantMessageColor: options.assistantMessageColor || "#ffffff",
-      assistantBorderColor: options.assistantBorderColor || "#e5e7eb",
+      mutedTextColor: options.mutedTextColor || "#df7d7d", // Timestamps, secondary text
+
       // Behavior options
       startOpen: options.startOpen || false,
       buttonSize: options.buttonSize || 60,
-      windowWidth: options.windowWidth || 380,
+      windowWidth: options.windowWidth || 450,
       windowHeight: options.windowHeight || 600,
       showModelInfo: options.showModelInfo || false,
+
+      // Debug mode (enable for development)
+      debug: false,
+
       ...options,
     };
 
@@ -50,18 +62,11 @@ class UniversalChatWidget {
   injectStyles() {
     if (document.getElementById("universal-chat-styles")) return;
 
-    // Generate gradient if secondary color provided, otherwise solid color
-    const backgroundStyle = this.options.secondaryColor
-      ? `linear-gradient(135deg, ${this.options.primaryColor} 0%, ${this.options.secondaryColor} 100%)`
-      : this.options.primaryColor;
+    // Use solid color only - no gradients
+    const backgroundStyle = this.options.primaryColor;
 
-    // Use user message color if specified, otherwise use primary color
-    const userMessageBg =
-      this.options.userMessageColor || this.options.primaryColor;
-    const userMessageStyle =
-      this.options.secondaryColor && !this.options.userMessageColor
-        ? backgroundStyle
-        : userMessageBg;
+    // Use explicit user message color
+    const userMessageStyle = this.options.userMessageColor;
 
     const styles = document.createElement("style");
     styles.id = "universal-chat-styles";
@@ -73,7 +78,7 @@ class UniversalChatWidget {
         ${this.options.position.includes("bottom") ? "bottom: 20px" : "top: 20px"};
         width: ${this.options.buttonSize}px;
         height: ${this.options.buttonSize}px;
-        border-radius: 50%;
+        border-radius: 4px;
         background: ${backgroundStyle};
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         cursor: pointer;
@@ -90,6 +95,7 @@ class UniversalChatWidget {
       .universal-chat-button:hover {
         transform: scale(1.1);
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        background: ${this.options.secondaryColor};
       }
 
       .universal-chat-button.chat-open {
@@ -103,7 +109,7 @@ class UniversalChatWidget {
         right: -5px;
         background: #ef4444;
         color: white;
-        border-radius: 10px;
+        border-radius: 6px;
         padding: 2px 6px;
         font-size: 12px;
         font-weight: bold;
@@ -120,7 +126,7 @@ class UniversalChatWidget {
         transform: translateX(-50%);
         background: ${this.options.backgroundColor};
         padding: 4px 8px;
-        border-radius: 12px;
+        border-radius: 6px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         display: flex;
         align-items: center;
@@ -152,7 +158,7 @@ class UniversalChatWidget {
         ${this.options.position.includes("right") ? "right: 0" : "left: 0"};
         background: ${this.options.backgroundColor};
         padding: 8px 12px;
-        border-radius: 12px;
+        border-radius: 6px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         max-width: 250px;
         font-size: 14px;
@@ -172,7 +178,7 @@ class UniversalChatWidget {
         height: ${this.options.windowHeight}px;
         max-height: calc(100vh - 120px);
         background: ${this.options.backgroundColor};
-        border-radius: 16px;
+        border-radius: 4px;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
         display: flex;
         flex-direction: column;
@@ -181,7 +187,7 @@ class UniversalChatWidget {
         transform: translateY(20px) scale(0.95);
         pointer-events: none;
         transition: all 0.3s ease;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-family: inherit;
       }
 
       .universal-chat-window.open {
@@ -195,7 +201,7 @@ class UniversalChatWidget {
         background: ${backgroundStyle};
         color: ${this.options.textColor};
         padding: 1.25rem;
-        border-radius: 16px 16px 0 0;
+        border-radius: 4px 4px 0 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -224,7 +230,7 @@ class UniversalChatWidget {
         color: ${this.options.textColor};
         width: 32px;
         height: 32px;
-        border-radius: 8px;
+        border-radius: 4px;
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -234,7 +240,7 @@ class UniversalChatWidget {
       }
 
       .chat-header-btn:hover {
-        background: rgba(255, 255, 255, 0.3);
+        background: ${this.options.secondaryColor}40;
       }
 
       /* Messages */
@@ -271,27 +277,28 @@ class UniversalChatWidget {
         display: inline-block;
         max-width: 80%;
         padding: 0.75rem 1rem;
-        border-radius: 18px;
+        border-radius: 8px;
         word-wrap: break-word;
       }
 
       .message.user .message-bubble {
         background: ${userMessageStyle};
+        border: 1px solid ${this.options.userBorderColor || this.options.userMessageColor};
         color: ${this.options.textColor};
-        border-radius: 18px 18px 4px 18px;
+        border-radius: 8px 8px 4px 8px;
         text-align: left;
       }
 
       .message.assistant .message-bubble {
         background: ${this.options.assistantMessageColor};
         border: 1px solid ${this.options.assistantBorderColor};
-        border-radius: 18px 18px 18px 4px;
+        border-radius: 8px 8px 8px 4px;
         color: #1f2937;
       }
 
       .message-time {
         font-size: 0.7rem;
-        color: #9ca3af;
+        color: ${this.options.mutedTextColor || "#9ca3af"};
         margin-top: 0.25rem;
       }
 
@@ -300,7 +307,7 @@ class UniversalChatWidget {
         padding: 0.75rem 1rem;
         background: ${this.options.assistantMessageColor};
         border: 1px solid ${this.options.assistantBorderColor};
-        border-radius: 18px;
+        border-radius: 8px;
       }
 
       .typing-indicator span {
@@ -326,7 +333,7 @@ class UniversalChatWidget {
         padding: 1rem;
         background: ${this.options.backgroundColor};
         border-top: 1px solid #e5e7eb;
-        border-radius: 0 0 16px 16px;
+        border-radius: 0 0 4px 4px;
       }
 
       .chat-input-container {
@@ -338,7 +345,7 @@ class UniversalChatWidget {
         flex: 1;
         padding: 0.75rem;
         border: 1px solid #e5e7eb;
-        border-radius: 12px;
+        border-radius: 4px;
         resize: none;
         font-family: inherit;
         font-size: 0.95rem;
@@ -350,8 +357,8 @@ class UniversalChatWidget {
 
       .chat-input:focus {
         outline: none;
-        border-color: ${this.options.primaryColor};
-        box-shadow: 0 0 0 3px ${this.options.primaryColor}20;
+        border-color: ${this.options.secondaryColor};
+        box-shadow: 0 0 0 3px ${this.options.secondaryColor}20;
       }
 
       .chat-send-btn {
@@ -359,7 +366,7 @@ class UniversalChatWidget {
         background: ${backgroundStyle};
         color: ${this.options.textColor};
         border: none;
-        border-radius: 12px;
+        border-radius: 4px;
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -371,7 +378,8 @@ class UniversalChatWidget {
 
       .chat-send-btn:hover:not(:disabled) {
         transform: scale(1.05);
-        box-shadow: 0 2px 8px ${this.options.primaryColor}40;
+        box-shadow: 0 2px 8px ${this.options.secondaryColor}40;
+        background: ${this.options.secondaryColor};
       }
 
       .chat-send-btn:disabled {
@@ -382,7 +390,7 @@ class UniversalChatWidget {
       /* Model info badge */
       .model-info {
         font-size: 0.7rem;
-        color: #9ca3af;
+        color: ${this.options.mutedTextColor || "#9ca3af"};
         text-align: center;
         padding: 0.25rem;
         background: #f3f4f6;
@@ -452,7 +460,7 @@ class UniversalChatWidget {
     // Create button
     this.button = document.createElement("button");
     this.button.className = "universal-chat-button";
-    this.button.innerHTML = "💬";
+    this.button.innerHTML = "Chat";
     this.button.setAttribute("aria-label", "Open chat");
 
     // Add unread badge
@@ -479,7 +487,7 @@ class UniversalChatWidget {
           <p>${this.options.subtitle}</p>
         </div>
         <div class="chat-header-actions">
-          <button class="chat-header-btn chat-clear-btn" title="Clear chat">🔄</button>
+          <button class="chat-header-btn chat-clear-btn" title="Clear chat">↻</button>
           <button class="chat-header-btn chat-close-btn" title="Close">×</button>
         </div>
       </div>

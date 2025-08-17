@@ -45,7 +45,7 @@ class UniversalChatWidget {
       showModelInfo: options.showModelInfo || false,
 
       // Debug mode (enable for development)
-      debug: false,
+      debug: options.debug || false,
 
       ...options,
     };
@@ -136,6 +136,117 @@ class UniversalChatWidget {
         ],
         throwOnError: false,
         errorColor: this.options.stampColor,
+      });
+    }
+  }
+
+  renderCitations(messageElement, sources = []) {
+    const messageBubble = messageElement.querySelector(".message-bubble");
+    if (!messageBubble) return;
+
+    let content = messageBubble.innerHTML;
+    const citations = {};
+
+    // First try to use structured sources if provided
+    if (sources && sources.length > 0) {
+      // Extract citations from sources data
+      sources.forEach((sourceData, index) => {
+        const citationNum = index + 1;
+        const source = sourceData.source;
+        const document = sourceData.document;
+
+        // Create reference text from source metadata
+        let referenceText = `<strong>${source.name}</strong>`;
+        if (source.description) {
+          referenceText += ` - ${source.description}`;
+        }
+        if (document) {
+          // Get first document snippet from the numbered keys
+          const documentKeys = Object.keys(document);
+          if (documentKeys.length > 0) {
+            const firstDoc = document[documentKeys[0]];
+            const snippet = firstDoc
+              .substring(0, 200)
+              .replace(/[#*]/g, "")
+              .trim();
+            referenceText += `<br><em>${snippet}...</em>`;
+          }
+        }
+
+        citations[citationNum] = referenceText;
+      });
+    } else {
+      // Fallback: Parse citations from text content
+      const citationPattern = /\[(\d+)\]\s*([\s\S]*?)(?=\s*\[\d+\]|$)/g;
+      let match;
+
+      while ((match = citationPattern.exec(content)) !== null) {
+        const citationNum = parseInt(match[1]);
+        const referenceText = match[2].trim();
+
+        // Clean and check if it's substantial content
+        const cleanText = referenceText
+          .replace(/<[^>]*>/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        if (cleanText.length > 15) {
+          citations[citationNum] = referenceText;
+
+          // Replace this citation with a clickable link
+          const replacement = `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference">[${citationNum}]</span>`;
+          content = content.replace(match[0], replacement);
+
+          // Reset regex position since we modified the string
+          citationPattern.lastIndex = 0;
+        }
+      }
+    }
+
+    // Replace citation numbers with clickable links (for structured sources or remaining citations)
+    content = content.replace(/\[(\d+)\]/g, (match, num) => {
+      const citationNum = parseInt(num);
+      if (citations[citationNum]) {
+        return `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference">[${citationNum}]</span>`;
+      }
+      return match;
+    });
+
+    // If we have citations, create references section
+    if (Object.keys(citations).length > 0) {
+      let referencesHtml =
+        '<div class="references-section"><h4>References:</h4><ol class="references-list">';
+
+      const sortedNums = Object.keys(citations).sort(
+        (a, b) => parseInt(a) - parseInt(b),
+      );
+      sortedNums.forEach((num) => {
+        referencesHtml += `<li id="ref-${num}" class="reference-item">${citations[num]}</li>`;
+      });
+
+      referencesHtml += "</ol></div>";
+      content += referencesHtml;
+
+      messageBubble.innerHTML = content;
+
+      // Add click handlers for citation links
+      messageElement.querySelectorAll(".citation-link").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          const citationNum = e.target.dataset.citation;
+          const referenceElement = messageElement.querySelector(
+            `#ref-${citationNum}`,
+          );
+          if (referenceElement) {
+            referenceElement.scrollIntoView({
+              behavior: "smooth",
+              block: "nearest",
+            });
+            referenceElement.classList.add("highlighted");
+            setTimeout(() => {
+              referenceElement.classList.remove("highlighted");
+            }, 2000);
+          }
+        });
       });
     }
   }
@@ -570,6 +681,7 @@ class UniversalChatWidget {
         line-height: 1.4;
         position: relative;
         font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        border: 1px solid ${this.options.borderColor};
       }
 
       .message-bubble pre code {
@@ -626,6 +738,56 @@ class UniversalChatWidget {
         padding: 0.25rem;
         border-radius: 3px;
         background: ${this.options.codeBackgroundColor};
+      }
+
+      /* Citation styling */
+      .citation-link {
+        color: ${this.options.codeTextColor};
+        cursor: pointer;
+        text-decoration: none;
+        font-weight: 500;
+        padding: 1px 3px;
+        border-radius: 2px;
+        transition: all 0.2s ease;
+        font-size: 0.85em;
+      }
+
+      .citation-link:hover {
+        background: ${this.options.codeBackgroundColor};
+        color: ${this.options.codeTextColor};
+      }
+
+      .references-section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid ${this.options.borderColor};
+      }
+
+      .references-section h4 {
+        margin: 0 0 1rem 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: ${this.options.assistantFontColor};
+      }
+
+      .references-list {
+        margin: 0;
+        padding-left: 1rem;
+        font-size: 0.75em;
+      }
+
+      .reference-item {
+        margin-bottom: 0.5rem;
+        color: ${this.options.assistantFontColor};
+        transition: background-color 0.3s ease;
+        text-align: justify;
+      }
+
+      .reference-item.highlighted {
+        background: ${this.options.codeBackgroundColor};
+        padding: 0.5rem;
+        border-radius: 2px;
+        border-left: 2px solid ${this.options.userColor};
       }
 
       /* Animations */
@@ -716,6 +878,9 @@ class UniversalChatWidget {
 
     // Render LaTeX in welcome message
     this.renderLatex(this.messagesEl);
+
+    // Render citations in welcome message
+    this.renderCitations(this.messagesEl.querySelector(".message"), []);
   }
 
   bindEvents() {
@@ -811,13 +976,30 @@ class UniversalChatWidget {
         this.modelInfoEl.textContent = `Model: ${data.model}`;
       }
 
+      // Extract content and sources from API response
+      const assistantContent =
+        data.choices?.[0]?.message?.content || data.response;
+
+      // Extract sources from nested API structure
+      let sources = [];
+      if (data.source?.sources) {
+        sources = Object.values(data.source.sources);
+      }
+
+      // Debug logging
+      if (this.options.debug) {
+        console.log("API Response:", data);
+        console.log("Sources found:", sources);
+        console.log("Content:", assistantContent);
+      }
+
       this.history.push(
         { role: "user", content: message },
-        { role: "assistant", content: data.response },
+        { role: "assistant", content: assistantContent },
       );
 
       this.hideTyping();
-      this.addMessage("assistant", data.response);
+      this.addMessage("assistant", assistantContent, sources);
 
       if (!this.isOpen) {
         this.unreadCount++;
@@ -884,7 +1066,7 @@ class UniversalChatWidget {
     if (this.previewTimeout) clearTimeout(this.previewTimeout);
   }
 
-  addMessage(type, content) {
+  addMessage(type, content, sources = []) {
     const messageEl = document.createElement("div");
     messageEl.className = `message ${type}`;
     const formatted = this.formatMessage(content);
@@ -900,6 +1082,9 @@ class UniversalChatWidget {
 
     // Render LaTeX in the message
     this.renderLatex(messageEl);
+
+    // Render citations in the message with sources
+    this.renderCitations(messageEl, sources);
 
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
@@ -945,6 +1130,9 @@ class UniversalChatWidget {
 
     // Render LaTeX in welcome message
     this.renderLatex(this.messagesEl);
+
+    // Render citations in welcome message
+    this.renderCitations(this.messagesEl.querySelector(".message"), []);
 
     this.updateUnreadBadge();
     this.saveState();

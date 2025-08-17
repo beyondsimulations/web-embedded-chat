@@ -12,22 +12,22 @@ class UniversalChatWidget {
       position: options.position || "bottom-right", // bottom-right, bottom-left, top-right, top-left
 
       // Main theme colors
-      primaryColor: options.primaryColor || "#99bfbb", // Main brand color (user messages, buttons)
-      secondaryColor: options.secondaryColor || "#0f6466", // Hover states, focus rings, accents
+      primaryColor: options.primaryColor || "#0f6466", // Main brand color (user messages, buttons)
+      secondaryColor: options.secondaryColor || "#99bfbb", // Hover states, focus rings, accents
       backgroundColor: options.backgroundColor || "#ffffff", // Window background
-      headerBackgroundColor: options.headerBackgroundColor || "#7da3a0", // Header background (both title and subtitle rows)
+      headerBackgroundColor: options.headerBackgroundColor || "#2c3532", // Header background (both title and subtitle rows)
 
       // Message styling
       userMessageColor: options.userMessageColor || "#99bfbb", // User message bubbles
       assistantMessageColor: options.assistantMessageColor || "#fdcd9a", // Assistant message bubbles
-      messageBorderColor: options.messageBorderColor || "#7da3a0", // Border for both message types
+      messageBorderColor: options.messageBorderColor || "#2c3532", // Border for both message types
 
       // Text colors
       textColor: options.textColor || "#ffffff", // Text on colored backgrounds (buttons)
       headerTextColor: options.headerTextColor || "#ffffff", // Text in header (title and subtitle)
-      userTextColor: options.userTextColor || "#1f2937", // Text in user message bubbles
-      assistantTextColor: options.assistantTextColor || "#1f2937", // Text in assistant message bubbles
-      mutedTextColor: options.mutedTextColor || "#df7d7d", // Timestamps, secondary text
+      userTextColor: options.userTextColor || "#2c3532", // Text in user message bubbles
+      assistantTextColor: options.assistantTextColor || "#2c3532", // Text in assistant message bubbles
+      mutedTextColor: options.mutedTextColor || "#99bfbb", // Timestamps, secondary text
 
       // Behavior options
       startOpen: options.startOpen || false,
@@ -225,14 +225,14 @@ class UniversalChatWidget {
         background: none;
         border: none;
         color: ${this.options.headerTextColor};
-        width: 40px;
-        height: 40px;
+        width: 44px;
+        height: 44px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
         transition: opacity 0.2s;
-        font-size: 24px;
+        font-size: 28px;
       }
 
       .chat-header-btn:hover {
@@ -244,8 +244,10 @@ class UniversalChatWidget {
         flex: 1;
         overflow-y: auto;
         padding: 1rem;
+        padding-bottom: 80px;
         background: #f9fafb;
         scroll-behavior: smooth;
+        position: relative;
       }
 
       .chat-messages::-webkit-scrollbar {
@@ -327,13 +329,13 @@ class UniversalChatWidget {
       /* Input Area */
       .chat-input-area {
         position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
+        bottom: 1rem;
+        left: 1rem;
+        right: 1rem;
         background: ${this.options.backgroundColor};
-        padding: 1rem;
-        border-top: 1px solid #e5e7eb;
-        border-radius: 0 0 4px 4px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        z-index: 10;
       }
 
       .chat-input-container {
@@ -342,6 +344,7 @@ class UniversalChatWidget {
         border-radius: 6px;
         overflow: hidden;
         background: ${this.options.backgroundColor};
+        padding: 0;
       }
 
       .chat-input {
@@ -503,17 +506,17 @@ class UniversalChatWidget {
           <div class="message-bubble">${this.options.welcomeMessage}</div>
           <div class="message-time">${this.formatTime(new Date())}</div>
         </div>
-      </div>
-      <div class="chat-input-area">
-        <div class="chat-input-container">
-          <textarea
-            class="chat-input"
-            placeholder="${this.options.placeholder}"
-            maxlength="2000"
-            rows="1"></textarea>
-          <button class="chat-send-btn" disabled>
-            Send
-          </button>
+        <div class="chat-input-area">
+          <div class="chat-input-container">
+            <textarea
+              class="chat-input"
+              placeholder="${this.options.placeholder}"
+              maxlength="2000"
+              rows="1"></textarea>
+            <button class="chat-send-btn" disabled>
+              Send
+            </button>
+          </div>
         </div>
       </div>
     `;

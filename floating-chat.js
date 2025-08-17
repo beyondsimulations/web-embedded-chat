@@ -25,10 +25,12 @@ class UniversalChatWidget {
       userMessageColor: options.userMessageColor || "#99bfbb", // User message bubbles
       assistantMessageColor: options.assistantMessageColor || "#fdcd9a", // Assistant message bubbles
       messageBorderColor: options.messageBorderColor || "#2c3532", // Border for both message types
+      userMessageOpacity: options.userMessageOpacity || 1.0, // Opacity for user message bubbles (0.0 to 1.0)
+      assistantMessageOpacity: options.assistantMessageOpacity || 1.0, // Opacity for assistant message bubbles (0.0 to 1.0)
 
       // Text colors
       textColor: options.textColor || "#ffffff", // Text on colored backgrounds (buttons)
-      headerTextColor: options.headerTextColor || "#ffffff", // Text in header (title and subtitle)
+      headerTextColor: options.headerTextColor || "#ffffff", // Text in header (title)
       userTextColor: options.userTextColor || "#2c3532", // Text in user message bubbles
       assistantTextColor: options.assistantTextColor || "#2c3532", // Text in assistant message bubbles
       mutedTextColor: options.mutedTextColor || "#99bfbb", // Timestamps, secondary text
@@ -96,9 +98,6 @@ class UniversalChatWidget {
     // Use solid color only - no gradients
     const backgroundStyle = this.options.primaryColor;
     const headerBackgroundStyle = this.options.headerBackgroundColor;
-
-    // Use explicit user message color
-    const userMessageStyle = this.options.userMessageColor;
 
     const styles = document.createElement("style");
     styles.id = "universal-chat-styles";
@@ -220,6 +219,7 @@ class UniversalChatWidget {
         pointer-events: none;
         transition: all 0.3s ease;
         font-family: inherit;
+
       }
 
       .universal-chat-window.open {
@@ -232,7 +232,7 @@ class UniversalChatWidget {
       .chat-header {
         background: ${headerBackgroundStyle};
         color: ${this.options.headerTextColor};
-        padding: 1rem 1.25rem;
+        padding: 0.5rem 1.25rem;
         border-radius: 4px 4px 0 0;
         display: flex;
         justify-content: space-between;
@@ -243,6 +243,7 @@ class UniversalChatWidget {
         margin: 0;
         font-size: 1.1rem;
         font-weight: 600;
+        color: ${this.options.headerTextColor};
       }
 
       .chat-header-actions {
@@ -273,10 +274,9 @@ class UniversalChatWidget {
         flex: 1;
         overflow-y: auto;
         padding: 1rem;
-        padding-bottom: 80px;
+        padding-bottom: 100px;
         background: #f9fafb;
         scroll-behavior: smooth;
-        position: relative;
       }
 
       .chat-messages::-webkit-scrollbar {
@@ -309,7 +309,7 @@ class UniversalChatWidget {
       }
 
       .message.user .message-bubble {
-        background: ${userMessageStyle};
+        background: color-mix(in srgb, ${this.options.userMessageColor}, transparent ${(1 - this.options.userMessageOpacity) * 100}%);
         border: 1px solid ${this.options.messageBorderColor};
         color: ${this.options.userTextColor};
         border-radius: 8px 8px 4px 8px;
@@ -317,7 +317,7 @@ class UniversalChatWidget {
       }
 
       .message.assistant .message-bubble {
-        background: ${this.options.assistantMessageColor};
+        background: color-mix(in srgb, ${this.options.assistantMessageColor}, transparent ${(1 - this.options.assistantMessageOpacity) * 100}%);
         border: 1px solid ${this.options.messageBorderColor};
         border-radius: 8px 8px 8px 4px;
         color: ${this.options.assistantTextColor};
@@ -363,7 +363,7 @@ class UniversalChatWidget {
         right: 1rem;
         background: ${this.options.backgroundColor};
         border-radius: 6px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         z-index: 10;
       }
 
@@ -394,8 +394,7 @@ class UniversalChatWidget {
       }
 
       .chat-input-container:focus-within {
-        border-color: ${this.options.secondaryColor};
-        box-shadow: 0 0 0 3px ${this.options.secondaryColor}20;
+        box-shadow: 0 0 0 6px ${this.options.secondaryColor}20;
       }
 
       .chat-send-btn {
@@ -535,17 +534,17 @@ class UniversalChatWidget {
           <div class="message-bubble">${this.options.welcomeMessage}</div>
           <div class="message-time">${this.formatTime(new Date())}</div>
         </div>
-        <div class="chat-input-area">
-          <div class="chat-input-container">
-            <textarea
-              class="chat-input"
-              placeholder="${this.options.placeholder}"
-              maxlength="2000"
-              rows="1"></textarea>
-            <button class="chat-send-btn" disabled>
-              Send
-            </button>
-          </div>
+      </div>
+      <div class="chat-input-area">
+        <div class="chat-input-container">
+          <textarea
+            class="chat-input"
+            placeholder="${this.options.placeholder}"
+            maxlength="2000"
+            rows="1"></textarea>
+          <button class="chat-send-btn" disabled>
+            Send
+          </button>
         </div>
       </div>
     `;

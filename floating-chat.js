@@ -31,6 +31,7 @@ class UniversalChatWidget {
       chatBackground: options.chatBackground || "#ffffff", // Chat window and input background
       stampColor: options.stampColor || "#df7d7d", // Timestamps and unread badge
       codeBackgroundColor: options.codeBackgroundColor || "#f3f4f6", // Code block backgrounds
+      codeTextColor: options.codeTextColor || "#df7d7d", // Text color for code content
       borderColor: options.borderColor || "#2c3532", // Borders for bubbles and input
       buttonIconColor: options.buttonIconColor || "#ffffff", // Chat button icons
       scrollbarColor: options.scrollbarColor || "#d1d5db", // Scrollbar color
@@ -499,21 +500,21 @@ class UniversalChatWidget {
         background: ${this.options.codeBackgroundColor};
         padding: 0.125rem 0.25rem;
         border-radius: 2px;
-        font-family: 'Courier New', monospace;
+        font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         font-size: 0.9em;
-        color: ${this.options.assistantFontColor};
+        color: ${this.options.codeTextColor};
         word-break: break-all;
         white-space: pre-wrap;
       }
 
       .message.user .message-bubble code {
         background: ${this.options.codeBackgroundColor};
-        color: ${this.options.userFontColor};
+        color: ${this.options.codeTextColor};
       }
 
       .message-bubble pre {
         background: ${this.options.codeBackgroundColor};
-        color: ${this.options.assistantFontColor};
+        color: ${this.options.codeTextColor};
         padding: 0.75rem;
         border-radius: 2px;
         overflow-x: auto;
@@ -524,6 +525,7 @@ class UniversalChatWidget {
         word-break: break-word;
         line-height: 1.4;
         position: relative;
+        font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
       }
 
       .message-bubble pre code {

@@ -1,6 +1,4 @@
 // Universal Chat Widget - Works with any OpenAI-compatible API
-// Configuration - CHANGE THIS to your Cloudflare Worker URL
-const CHAT_API_ENDPOINT = "https://your-worker.workers.dev";
 
 class UniversalChatWidget {
   constructor(options = {}) {
@@ -10,6 +8,10 @@ class UniversalChatWidget {
         options.welcomeMessage || "Hello! How can I help you today?",
       placeholder: options.placeholder || "Type your question...",
       position: options.position || "bottom-right", // bottom-right, bottom-left, top-right, top-left
+
+      // API Configuration
+      apiEndpoint: options.apiEndpoint || "https://your-worker.workers.dev",
+      model: options.model || "your-model-choice", // Model to use for API requests
 
       // Main theme colors
       primaryColor: options.primaryColor || "#0f6466", // Main brand color (user messages, buttons)
@@ -602,12 +604,13 @@ class UniversalChatWidget {
     this.showTyping();
 
     try {
-      const response = await fetch(CHAT_API_ENDPOINT, {
+      const response = await fetch(this.options.apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: message,
           history: this.history.slice(-10),
+          model: this.options.model,
         }),
       });
 

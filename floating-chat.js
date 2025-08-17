@@ -511,6 +511,25 @@ class UniversalChatWidget {
         padding: 0.75rem 1rem;
         border-radius: 2px;
         word-wrap: break-word;
+        line-height: 1.5;
+      }
+
+      .message-bubble h1,
+      .message-bubble h2,
+      .message-bubble h3 {
+        margin: 1rem 0 0.5rem 0;
+        font-weight: 600;
+        color: ${this.options.assistantFontColor};
+      }
+
+      .message-bubble h1 { font-size: 1.4em; }
+      .message-bubble h2 { font-size: 1.25em; }
+      .message-bubble h3 { font-size: 1.1em; }
+
+      .message-bubble h1:first-child,
+      .message-bubble h2:first-child,
+      .message-bubble h3:first-child {
+        margin-top: 0;
       }
 
       .message.user .message-bubble {
@@ -1096,10 +1115,13 @@ class UniversalChatWidget {
       .replace(/>/g, "&gt;");
 
     return escaped
-      .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
+      .replace(/^### (.*$)/gm, "<h3>$1</h3>")
+      .replace(/^## (.*$)/gm, "<h2>$1</h2>")
+      .replace(/^# (.*$)/gm, "<h1>$1</h1>")
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      .replace(/```([^`]+)```/g, "<pre><code>$1</code></pre>")
       .replace(/\n/g, "<br>");
   }
 

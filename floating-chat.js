@@ -9,9 +9,11 @@ class UniversalChatWidget {
       placeholder: options.placeholder || "Type your question...",
       position: options.position || "bottom-right", // bottom-right, bottom-left, top-right, top-left
 
-      // API Configuration
-      apiEndpoint: options.apiEndpoint || "https://your-worker.workers.dev",
-      model: options.model || "your-model-choice", // Model to use for API requests
+      // API Configuration with validation
+      apiEndpoint:
+        this.validateApiEndpoint(options.apiEndpoint) ||
+        "https://your-worker.workers.dev",
+      model: this.validateModel(options.model) || "gpt-3.5-turbo", // Model to use for API requests
 
       // Main theme colors
       primaryColor: options.primaryColor || "#0f6466", // Main brand color (user messages, buttons)
@@ -50,6 +52,31 @@ class UniversalChatWidget {
     this.hasInteracted = false;
 
     this.init();
+  }
+
+  validateApiEndpoint(endpoint) {
+    if (!endpoint) return null;
+    try {
+      const url = new URL(endpoint);
+      if (!["https:", "http:"].includes(url.protocol)) {
+        console.warn("Chat Widget: Only HTTP/HTTPS endpoints allowed");
+        return null;
+      }
+      return endpoint;
+    } catch (e) {
+      console.warn("Chat Widget: Invalid API endpoint provided");
+      return null;
+    }
+  }
+
+  validateModel(model) {
+    if (!model || typeof model !== "string") return null;
+    // Allow alphanumeric, hyphens, underscores, and dots only
+    if (!/^[a-zA-Z0-9\-_.]+$/.test(model)) {
+      console.warn("Chat Widget: Invalid model name provided");
+      return null;
+    }
+    return model.substring(0, 50); // Limit length
   }
 
   init() {

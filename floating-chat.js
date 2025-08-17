@@ -102,6 +102,44 @@ class UniversalChatWidget {
     });
   }
 
+  loadKaTeX() {
+    return new Promise((resolve) => {
+      if (window.katex) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src =
+        "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js";
+      script.onload = () => {
+        const autoRenderScript = document.createElement("script");
+        autoRenderScript.src =
+          "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js";
+        autoRenderScript.onload = () => resolve();
+        document.head.appendChild(autoRenderScript);
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  async renderLatex(messageElement) {
+    await this.loadKaTeX();
+
+    if (window.renderMathInElement) {
+      window.renderMathInElement(messageElement, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
+        ],
+        throwOnError: false,
+        errorColor: this.options.stampColor,
+      });
+    }
+  }
+
   validateApiEndpoint(endpoint) {
     if (!endpoint) return null;
     try {
@@ -148,6 +186,12 @@ class UniversalChatWidget {
     const styles = document.createElement("style");
     styles.id = "universal-chat-styles";
     styles.textContent = `
+
+      /* Import Google Fonts and KaTeX */
+      @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap');
+      @import url('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css');
+
+
       /* Chat Button */
       .universal-chat-button {
         position: fixed;
@@ -566,6 +610,24 @@ class UniversalChatWidget {
         color: ${this.options.assistantFontColor};
       }
 
+      /* KaTeX styling */
+      .katex {
+        font-size: 1.1em;
+      }
+
+      .katex-display {
+        margin: 1em 0;
+        text-align: center;
+      }
+
+      .katex-error {
+        color: ${this.options.stampColor};
+        border: 1px solid ${this.options.stampColor};
+        padding: 0.25rem;
+        border-radius: 3px;
+        background: ${this.options.codeBackgroundColor};
+      }
+
       /* Animations */
       @keyframes slideUp {
         from { opacity: 0; transform: translateX(-50%) translateY(10px); }
@@ -651,6 +713,9 @@ class UniversalChatWidget {
 
     // Add copy buttons to welcome message
     this.addCopyButtonsToCodeBlocks(this.messagesEl);
+
+    // Render LaTeX in welcome message
+    this.renderLatex(this.messagesEl);
   }
 
   bindEvents() {
@@ -833,6 +898,9 @@ class UniversalChatWidget {
     // Add copy buttons to any code blocks in the message
     this.addCopyButtonsToCodeBlocks(messageEl);
 
+    // Render LaTeX in the message
+    this.renderLatex(messageEl);
+
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
 
@@ -874,6 +942,9 @@ class UniversalChatWidget {
 
     // Add copy buttons to welcome message
     this.addCopyButtonsToCodeBlocks(this.messagesEl);
+
+    // Render LaTeX in welcome message
+    this.renderLatex(this.messagesEl);
 
     this.updateUnreadBadge();
     this.saveState();

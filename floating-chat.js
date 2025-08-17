@@ -15,25 +15,26 @@ class UniversalChatWidget {
         "https://your-worker.workers.dev",
       model: this.validateModel(options.model) || "gpt-3.5-turbo", // Model to use for API requests
 
-      // Main theme colors
-      primaryColor: options.primaryColor || "#0f6466", // Main brand color (user messages, buttons)
-      secondaryColor: options.secondaryColor || "#99bfbb", // Hover states, focus rings, accents
-      backgroundColor: options.backgroundColor || "#ffffff", // Window background
-      headerBackgroundColor: options.headerBackgroundColor || "#2c3532", // Header background (both title and subtitle rows)
+      // Header colors
+      titleBackgroundColor: options.titleBackgroundColor || "#2c3532", // Header background
+      titleFontColor: options.titleFontColor || "#ffffff", // Text and icons in header
 
-      // Message styling
-      userMessageColor: options.userMessageColor || "#99bfbb", // User message bubbles
-      assistantMessageColor: options.assistantMessageColor || "#fdcd9a", // Assistant message bubbles
-      messageBorderColor: options.messageBorderColor || "#2c3532", // Border for both message types
-      userMessageOpacity: options.userMessageOpacity || 1.0, // Opacity for user message bubbles (0.0 to 1.0)
+      // Message bubble colors
+      assistantColor: options.assistantColor || "#fdcd9a", // Assistant message bubble background
+      assistantFontColor: options.assistantFontColor || "#2c3532", // Assistant text, typing dots, message preview
       assistantMessageOpacity: options.assistantMessageOpacity || 1.0, // Opacity for assistant message bubbles (0.0 to 1.0)
+      userColor: options.userColor || "#99bfbb", // User message bubble and send button background
+      userFontColor: options.userFontColor || "#2c3532", // Text in user message bubbles
+      userMessageOpacity: options.userMessageOpacity || 1.0, // Opacity for user message bubbles (0.0 to 1.0)
 
-      // Text colors
-      textColor: options.textColor || "#ffffff", // Text on colored backgrounds (buttons)
-      headerTextColor: options.headerTextColor || "#ffffff", // Text in header (title)
-      userTextColor: options.userTextColor || "#2c3532", // Text in user message bubbles
-      assistantTextColor: options.assistantTextColor || "#2c3532", // Text in assistant message bubbles
-      mutedTextColor: options.mutedTextColor || "#99bfbb", // Timestamps, secondary text
+      // Interface colors
+      chatBackground: options.chatBackground || "#ffffff", // Chat window and input background
+      stampColor: options.stampColor || "#df7d7d", // Timestamps and unread badge
+      codeBackgroundColor: options.codeBackgroundColor || "#f3f4f6", // Code block backgrounds
+      borderColor: options.borderColor || "#2c3532", // Borders for bubbles and input
+      buttonIconColor: options.buttonIconColor || "#ffffff", // Chat button icons
+      scrollbarColor: options.scrollbarColor || "#d1d5db", // Scrollbar color
+      inputTextColor: options.inputTextColor || "#1f2937", // Text color in input field
 
       // Behavior options
       startOpen: options.startOpen || false,
@@ -54,6 +55,50 @@ class UniversalChatWidget {
     this.hasInteracted = false;
 
     this.init();
+  }
+
+  addCopyButtonsToCodeBlocks(messageElement) {
+    const codeBlocks = messageElement.querySelectorAll("pre");
+    codeBlocks.forEach((codeBlock) => {
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "code-copy-btn";
+      copyBtn.textContent = "Copy";
+      copyBtn.setAttribute("aria-label", "Copy code");
+
+      copyBtn.addEventListener("click", async () => {
+        const codeContent = codeBlock.querySelector("code") || codeBlock;
+        const textToCopy = codeContent.textContent;
+
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+          copyBtn.textContent = "Copied!";
+          copyBtn.classList.add("copied");
+
+          setTimeout(() => {
+            copyBtn.textContent = "Copy";
+            copyBtn.classList.remove("copied");
+          }, 2000);
+        } catch (err) {
+          // Fallback for older browsers
+          const textArea = document.createElement("textarea");
+          textArea.value = textToCopy;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textArea);
+
+          copyBtn.textContent = "Copied!";
+          copyBtn.classList.add("copied");
+
+          setTimeout(() => {
+            copyBtn.textContent = "Copy";
+            copyBtn.classList.remove("copied");
+          }, 2000);
+        }
+      });
+
+      codeBlock.appendChild(copyBtn);
+    });
   }
 
   validateApiEndpoint(endpoint) {
@@ -96,8 +141,8 @@ class UniversalChatWidget {
     if (document.getElementById("universal-chat-styles")) return;
 
     // Use solid color only - no gradients
-    const backgroundStyle = this.options.primaryColor;
-    const headerBackgroundStyle = this.options.headerBackgroundColor;
+    const backgroundStyle = this.options.userColor;
+    const headerBackgroundStyle = this.options.titleBackgroundColor;
 
     const styles = document.createElement("style");
     styles.id = "universal-chat-styles";
@@ -109,8 +154,8 @@ class UniversalChatWidget {
         ${this.options.position.includes("bottom") ? "bottom: 20px" : "top: 20px"};
         width: ${this.options.buttonSize}px;
         height: ${this.options.buttonSize}px;
-        border-radius: 4px;
-        background: ${this.options.assistantMessageColor};
+        border-radius: 2px;
+        background: ${this.options.assistantColor};
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         cursor: pointer;
         display: flex;
@@ -119,7 +164,7 @@ class UniversalChatWidget {
         transition: all 0.3s ease;
         z-index: 9998;
         border: none;
-        color: ${this.options.textColor};
+        color: ${this.options.buttonIconColor};
         font-size: 28px;
       }
 
@@ -130,7 +175,7 @@ class UniversalChatWidget {
 
       .universal-chat-button.chat-open {
         transform: rotate(90deg);
-        background: ${this.options.userMessageColor};
+        background: ${this.options.userColor};
       }
 
       .universal-chat-button.chat-open:hover {
@@ -142,9 +187,9 @@ class UniversalChatWidget {
         position: absolute;
         top: -5px;
         right: -5px;
-        background: #ef4444;
-        color: white;
-        border-radius: 6px;
+        background: ${this.options.assistantColor};
+        color: ${this.options.stampColor};
+        border-radius: 2px;
         padding: 2px 6px;
         font-size: 12px;
         font-weight: bold;
@@ -159,9 +204,9 @@ class UniversalChatWidget {
         bottom: -8px;
         left: 50%;
         transform: translateX(-50%);
-        background: ${this.options.backgroundColor};
+        background: ${this.options.chatBackground};
         padding: 4px 8px;
-        border-radius: 6px;
+        border-radius: 2px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         display: flex;
         align-items: center;
@@ -174,7 +219,7 @@ class UniversalChatWidget {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: ${this.options.primaryColor};
+        background: ${this.options.assistantFontColor};
         animation: typingDot 1.4s infinite;
       }
 
@@ -191,13 +236,13 @@ class UniversalChatWidget {
         position: absolute;
         bottom: -35px;
         ${this.options.position.includes("right") ? "right: 0" : "left: 0"};
-        background: ${this.options.backgroundColor};
+        background: ${this.options.chatBackground};
         padding: 8px 12px;
-        border-radius: 6px;
+        border-radius: 2px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         max-width: 250px;
         font-size: 14px;
-        color: #4b5563;
+        color: ${this.options.assistantFontColor};
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -212,8 +257,8 @@ class UniversalChatWidget {
         width: ${this.options.windowWidth}px;
         height: ${this.options.windowHeight}px;
         max-height: calc(100vh - 120px);
-        background: ${this.options.backgroundColor};
-        border-radius: 4px;
+        background: ${this.options.chatBackground};
+        border-radius: 2px;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
         display: flex;
         flex-direction: column;
@@ -235,9 +280,9 @@ class UniversalChatWidget {
       /* Header */
       .chat-header {
         background: ${headerBackgroundStyle};
-        color: ${this.options.headerTextColor};
+        color: ${this.options.titleFontColor};
         padding: 0.5rem 1.25rem;
-        border-radius: 4px 4px 0 0;
+        border-radius: 2px 2px 0 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -247,7 +292,7 @@ class UniversalChatWidget {
         margin: 0;
         font-size: 1.1rem;
         font-weight: 600;
-        color: ${this.options.headerTextColor};
+        color: ${this.options.titleFontColor};
       }
 
       .chat-header-actions {
@@ -256,9 +301,9 @@ class UniversalChatWidget {
       }
 
       .chat-header-btn {
-        background: none;
+        background: transparent;
         border: none;
-        color: ${this.options.headerTextColor};
+        color: ${this.options.titleFontColor};
         width: 44px;
         height: 44px;
         cursor: pointer;
@@ -279,7 +324,7 @@ class UniversalChatWidget {
         overflow-y: auto;
         padding: 1rem;
         padding-bottom: 100px;
-        background: #f9fafb;
+        background: ${this.options.chatBackground};
         scroll-behavior: smooth;
       }
 
@@ -288,8 +333,8 @@ class UniversalChatWidget {
       }
 
       .chat-messages::-webkit-scrollbar-thumb {
-        background: #d1d5db;
-        border-radius: 3px;
+        background: ${this.options.scrollbarColor};
+        border-radius: 2px;
       }
 
       .message {
@@ -308,37 +353,38 @@ class UniversalChatWidget {
         display: inline-block;
         max-width: 90%;
         padding: 0.75rem 1rem;
-        border-radius: 8px;
+        border-radius: 2px;
         word-wrap: break-word;
       }
 
       .message.user .message-bubble {
-        background: color-mix(in srgb, ${this.options.userMessageColor}, transparent ${(1 - this.options.userMessageOpacity) * 100}%);
-        border: 1px solid ${this.options.messageBorderColor};
-        color: ${this.options.userTextColor};
-        border-radius: 8px 8px 4px 8px;
+        background: color-mix(in srgb, ${this.options.userColor}, transparent ${(1 - this.options.userMessageOpacity) * 100}%);
+        border: 1px solid ${this.options.borderColor};
+        color: ${this.options.userFontColor};
+        border-radius: 2px;
         text-align: left;
       }
 
+
       .message.assistant .message-bubble {
-        background: color-mix(in srgb, ${this.options.assistantMessageColor}, transparent ${(1 - this.options.assistantMessageOpacity) * 100}%);
-        border: 1px solid ${this.options.messageBorderColor};
-        border-radius: 8px 8px 8px 4px;
-        color: ${this.options.assistantTextColor};
+        background: color-mix(in srgb, ${this.options.assistantColor}, transparent ${(1 - this.options.assistantMessageOpacity) * 100}%);
+        border: 1px solid ${this.options.borderColor};
+        border-radius: 2px;
+        color: ${this.options.assistantFontColor};
       }
 
       .message-time {
         font-size: 0.7rem;
-        color: ${this.options.mutedTextColor || "#9ca3af"};
+        color: ${this.options.stampColor};
         margin-top: 0.25rem;
       }
 
       .typing-indicator {
         display: inline-block;
         padding: 0.75rem 1rem;
-        background: color-mix(in srgb, ${this.options.assistantMessageColor}, transparent ${(1 - this.options.assistantMessageOpacity) * 100}%);
-        border: 1px solid ${this.options.messageBorderColor};
-        border-radius: 8px;
+        background: color-mix(in srgb, ${this.options.assistantColor}, transparent ${(1 - this.options.assistantMessageOpacity) * 100}%);
+        border: 1px solid ${this.options.borderColor};
+        border-radius: 2px;
       }
 
       .typing-indicator span {
@@ -346,7 +392,7 @@ class UniversalChatWidget {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: ${this.options.assistantTextColor};
+        background: ${this.options.assistantFontColor};
         margin: 0 2px;
         animation: typingBounce 1.4s infinite;
       }
@@ -365,18 +411,18 @@ class UniversalChatWidget {
         bottom: 1rem;
         left: 1rem;
         right: 1rem;
-        background: ${this.options.backgroundColor};
-        border-radius: 6px;
+        background: ${this.options.chatBackground};
+        border-radius: 2px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         z-index: 10;
       }
 
       .chat-input-container {
         display: flex;
-        border: 1px solid ${this.options.messageBorderColor};
-        border-radius: 6px;
+        border: 1px solid ${this.options.borderColor};
+        border-radius: 2px;
         overflow: hidden;
-        background: ${this.options.backgroundColor};
+        background: ${this.options.chatBackground};
         padding: 0;
       }
 
@@ -390,7 +436,7 @@ class UniversalChatWidget {
         line-height: 1.4;
         max-height: 100px;
         background: transparent;
-        color: #1f2937;
+        color: ${this.options.inputTextColor};
       }
 
       .chat-input:focus {
@@ -404,9 +450,9 @@ class UniversalChatWidget {
       .chat-send-btn {
         padding: 0.75rem 1rem;
         background: ${backgroundStyle};
-        color: ${this.options.textColor};
+        color: ${this.options.userFontColor};
         border: none;
-        border-left: 1px solid ${this.options.messageBorderColor};
+        border-left: 1px solid ${this.options.borderColor};
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -420,8 +466,8 @@ class UniversalChatWidget {
 
       .chat-send-btn:hover:not(:disabled) {
         transform: scale(1.05);
-        box-shadow: 0 2px 8px ${this.options.secondaryColor}40;
-        background: ${this.options.secondaryColor};
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        background: ${this.options.userColor};
       }
 
       .chat-send-btn:disabled {
@@ -432,12 +478,12 @@ class UniversalChatWidget {
       /* Model info badge */
       .model-info {
         font-size: 0.7rem;
-        color: ${this.options.mutedTextColor || "#9ca3af"};
+        color: ${this.options.stampColor};
         text-align: center;
         padding: 0.25rem;
-        background: #f3f4f6;
+        background: ${this.options.codeBackgroundColor};
         margin: 0 1rem;
-        border-radius: 4px;
+        border-radius: 2px;
       }
 
       /* Mobile */
@@ -450,32 +496,72 @@ class UniversalChatWidget {
 
       /* Markdown support */
       .message-bubble code {
-        background: ${this.options.primaryColor}15;
+        background: ${this.options.codeBackgroundColor};
         padding: 0.125rem 0.25rem;
-        border-radius: 3px;
+        border-radius: 2px;
         font-family: 'Courier New', monospace;
         font-size: 0.9em;
-        color: #1f2937;
+        color: ${this.options.assistantFontColor};
+        word-break: break-all;
+        white-space: pre-wrap;
       }
 
       .message.user .message-bubble code {
-        background: rgba(255, 255, 255, 0.2);
-        color: ${this.options.userTextColor};
+        background: ${this.options.codeBackgroundColor};
+        color: ${this.options.userFontColor};
       }
 
       .message-bubble pre {
-        background: #1e293b;
-        color: #e2e8f0;
+        background: ${this.options.codeBackgroundColor};
+        color: ${this.options.assistantFontColor};
         padding: 0.75rem;
-        border-radius: 8px;
+        border-radius: 2px;
         overflow-x: auto;
+        overflow-y: hidden;
         margin: 0.5rem 0;
+        max-width: 100%;
+        white-space: pre-wrap;
+        word-break: break-word;
+        line-height: 1.4;
+        position: relative;
       }
 
       .message-bubble pre code {
         background: transparent;
         padding: 0;
         color: inherit;
+        word-break: inherit;
+        white-space: inherit;
+      }
+
+      /* Copy button for code blocks */
+      .code-copy-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background: ${this.options.borderColor};
+        color: ${this.options.titleFontColor};
+        border: none;
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        z-index: 1;
+      }
+
+      .code-copy-btn:hover {
+        background: ${this.options.stampColor};
+      }
+
+      .message-bubble pre:hover .code-copy-btn {
+        opacity: 1;
+      }
+
+      .code-copy-btn.copied {
+        background: ${this.options.assistantColor};
+        color: ${this.options.assistantFontColor};
       }
 
       /* Animations */
@@ -560,6 +646,9 @@ class UniversalChatWidget {
     this.inputEl = this.window.querySelector(".chat-input");
     this.sendBtn = this.window.querySelector(".chat-send-btn");
     this.modelInfoEl = this.window.querySelector("#model-info");
+
+    // Add copy buttons to welcome message
+    this.addCopyButtonsToCodeBlocks(this.messagesEl);
   }
 
   bindEvents() {
@@ -738,6 +827,10 @@ class UniversalChatWidget {
       <div class="message-time">${time}</div>
     `;
     this.messagesEl.appendChild(messageEl);
+
+    // Add copy buttons to any code blocks in the message
+    this.addCopyButtonsToCodeBlocks(messageEl);
+
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
 
@@ -776,6 +869,11 @@ class UniversalChatWidget {
         <div class="message-time">${this.formatTime(new Date())}</div>
       </div>
     `;
+
+    // Add copy buttons to welcome message
+    this.addCopyButtonsToCodeBlocks(this.messagesEl);
+
+    this.updateUnreadBadge();
     this.saveState();
   }
 

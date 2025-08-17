@@ -332,7 +332,7 @@ class UniversalChatWidget {
       .typing-indicator {
         display: inline-block;
         padding: 0.75rem 1rem;
-        background: ${this.options.assistantMessageColor};
+        background: color-mix(in srgb, ${this.options.assistantMessageColor}, transparent ${(1 - this.options.assistantMessageOpacity) * 100}%);
         border: 1px solid ${this.options.messageBorderColor};
         border-radius: 8px;
       }
@@ -342,7 +342,7 @@ class UniversalChatWidget {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #9ca3af;
+        background: ${this.options.assistantTextColor};
         margin: 0 2px;
         animation: typingBounce 1.4s infinite;
       }

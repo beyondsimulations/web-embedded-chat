@@ -1,14 +1,26 @@
+// Controlled logging helper to prevent information disclosure
+function secureLog(message, sensitiveData = null, env = null) {
+  const isDevelopment =
+    env?.ENVIRONMENT === "development" || env?.NODE_ENV === "development";
+
+  if (isDevelopment && sensitiveData) {
+    console.log(message, sensitiveData);
+  } else {
+    console.log(message);
+  }
+}
+
 export default {
   async fetch(request, env) {
     // Add comprehensive logging for debugging
-    console.log("Worker started, method:", request.method);
+    secureLog("Worker started, method:", request.method, env);
 
     // Initialize rate limit headers (will be populated later)
     let rateLimitHeaders = {};
 
     // Smart CORS: automatically allow subdomains and paths
     const origin = request.headers.get("Origin") || "";
-    console.log("Origin:", origin);
+    secureLog("Origin received:", origin, env);
 
     // Define your exact allowed domains (no subdomains allowed)
     const allowedDomains = [
@@ -35,32 +47,14 @@ export default {
         const originUrl = new URL(origin);
         const originHostname = originUrl.hostname;
         const originProtocol = originUrl.protocol;
-        console.log(
-          "Parsed origin - hostname:",
-          originHostname,
-          "protocol:",
-          originProtocol,
-        );
+        secureLog("Origin validation in progress");
 
         // In production, only allow HTTPS origins
         const isHttpsValid = isDevelopment || originProtocol === "https:";
-        console.log(
-          "HTTPS validation:",
-          isHttpsValid,
-          "(isDevelopment:",
-          isDevelopment,
-          ")",
-        );
 
         // Check configured domains first
         const isDomainAllowed = allowedDomains.includes(originHostname);
         isAllowed = isDomainAllowed && isHttpsValid;
-        console.log(
-          "Domain allowed:",
-          isDomainAllowed,
-          "Final allowed:",
-          isAllowed,
-        );
 
         // In development, also allow common development origins
         if (!isAllowed && isDevelopment) {
@@ -71,20 +65,24 @@ export default {
             originHostname.endsWith(".localhost");
           if (isDevHost) {
             isAllowed = true;
-            console.log("Allowed as development host:", originHostname);
+            secureLog("Development host allowed:", originHostname, env);
           }
         }
       } catch (e) {
         // Invalid URL format
-        console.log("Invalid origin URL format:", origin, "Error:", e.message);
+        secureLog("Invalid origin URL format:", origin, env);
         isAllowed = false;
       }
 
       if (isAllowed) {
         allowedOrigin = origin;
-        console.log("Origin allowed, using:", allowedOrigin);
+        secureLog("Origin validation passed for:", allowedOrigin, env);
       } else {
-        console.log("Origin rejected, using fallback:", allowedOrigin);
+        secureLog(
+          "Origin validation failed, using fallback:",
+          allowedOrigin,
+          env,
+        );
       }
     }
 
@@ -118,7 +116,7 @@ export default {
       request.headers.get("CF-Connecting-IP") ||
       request.headers.get("X-Forwarded-For") ||
       "unknown";
-    console.log("Client IP:", clientIP);
+    secureLog("Rate limiting check for IP:", clientIP, env);
 
     // Rate limiting check and header preparation
     try {
@@ -145,7 +143,7 @@ export default {
       }
 
       if (!rateLimitResult.allowed) {
-        console.log("Rate limit exceeded for IP:", clientIP);
+        console.log("Rate limit exceeded");
         return new Response(
           JSON.stringify({
             error: "Rate limit exceeded. Please try again later.",
@@ -175,9 +173,9 @@ export default {
     try {
       // Validate environment variables first
       if (!env.API_ENDPOINT) {
-        console.error("Missing API_ENDPOINT environment variable");
+        console.error("Missing API_ENDPOINT configuration");
         return new Response(
-          JSON.stringify({ error: "Server configuration error" }),
+          JSON.stringify({ error: "Service configuration error" }),
           {
             status: 500,
             headers: {
@@ -190,9 +188,9 @@ export default {
       }
 
       if (!env.API_KEY) {
-        console.error("Missing API_KEY environment variable");
+        console.error("Missing API_KEY configuration");
         return new Response(
-          JSON.stringify({ error: "Server configuration error" }),
+          JSON.stringify({ error: "Service configuration error" }),
           {
             status: 500,
             headers: {
@@ -204,13 +202,16 @@ export default {
         );
       }
 
-      console.log("Parsing request body...");
       const body = await request.json();
-      console.log("Request body:", JSON.stringify(body));
+      secureLog(
+        "Request body parsed, message length:",
+        body.message?.length,
+        env,
+      );
 
       // Basic validation
       if (!body || typeof body !== "object") {
-        console.error("Invalid request body:", body);
+        console.error("Invalid request body received");
         return new Response(JSON.stringify({ error: "Invalid request body" }), {
           status: 400,
           headers: {
@@ -222,7 +223,7 @@ export default {
       }
 
       if (!body.message || typeof body.message !== "string") {
-        console.error("Missing or invalid message:", body.message);
+        console.error("Missing or invalid message");
         return new Response(JSON.stringify({ error: "Invalid message" }), {
           status: 400,
           headers: {
@@ -235,7 +236,7 @@ export default {
 
       // Validate model
       if (!body.model || typeof body.model !== "string") {
-        console.error("Missing or invalid model:", body.model);
+        console.error("Missing or invalid model");
         return new Response(JSON.stringify({ error: "Invalid model" }), {
           status: 400,
           headers: {
@@ -248,7 +249,7 @@ export default {
 
       // Sanitize model name (same validation as frontend)
       if (!/^[a-zA-Z0-9\-_.]+$/.test(body.model)) {
-        console.error("Invalid model format:", body.model);
+        console.error("Invalid model format");
         return new Response(JSON.stringify({ error: "Invalid model format" }), {
           status: 400,
           headers: {
@@ -262,7 +263,7 @@ export default {
       const sanitizedModel = body.model.substring(0, 50); // Limit length
 
       if (body.message.length > 2000) {
-        console.error("Message too long:", body.message.length);
+        console.error("Message too long");
         return new Response(
           JSON.stringify({ error: "Message too long (max 2000 characters)" }),
           {
@@ -308,16 +309,9 @@ export default {
         stream: false,
       };
 
-      console.log("API Endpoint:", env.API_ENDPOINT);
-      console.log("API Request Body:", JSON.stringify(apiRequestBody));
-      console.log("Messages array:", JSON.stringify(messages));
-
-      // Also log the Authorization header (first 20 chars only for security)
-      const authHeader = `Bearer ${env.API_KEY}`;
-      console.log(
-        "Auth header (first 20 chars):",
-        authHeader.substring(0, 20) + "...",
-      );
+      secureLog("API Endpoint:", env.API_ENDPOINT, env);
+      secureLog("API Request prepared with messages:", messages.length);
+      secureLog("Using model:", sanitizedModel);
 
       // Call OpenAI-compatible API
       const response = await fetch(env.API_ENDPOINT, {
@@ -330,14 +324,8 @@ export default {
       });
 
       if (!response.ok) {
-        console.error(`API response status: ${response.status}`);
-        console.error(
-          `API response headers:`,
-          Object.fromEntries(response.headers.entries()),
-        );
-        const errorText = await response.text();
-        console.error(`API response body:`, errorText);
-        throw new Error(`API error: ${response.status}`);
+        secureLog(`API response failed with status: ${response.status}`);
+        throw new Error(`API request failed`);
       }
 
       const data = await response.json();
@@ -359,15 +347,14 @@ export default {
         },
       );
     } catch (error) {
-      console.error("Worker error:", error);
-      console.error("Error stack:", error.stack);
+      secureLog("Worker error occurred:", error.message, env);
 
-      // More specific error messages
+      // Determine appropriate error message without exposing details
       let errorMessage = "Service temporarily unavailable";
       let statusCode = 500;
 
-      if (error.message.includes("API error:")) {
-        errorMessage = "External API error";
+      if (error.message.includes("API request failed")) {
+        errorMessage = "Unable to process request at this time";
         statusCode = 502;
       } else if (error.message.includes("JSON")) {
         errorMessage = "Invalid response format";
@@ -377,7 +364,6 @@ export default {
       return new Response(
         JSON.stringify({
           error: errorMessage,
-          debug: error.message, // Remove this in production
         }),
         {
           status: statusCode,

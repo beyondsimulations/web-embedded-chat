@@ -110,7 +110,7 @@ class UniversalChatWidget {
         width: ${this.options.buttonSize}px;
         height: ${this.options.buttonSize}px;
         border-radius: 4px;
-        background: ${backgroundStyle};
+        background: ${this.options.assistantMessageColor};
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         cursor: pointer;
         display: flex;
@@ -126,11 +126,15 @@ class UniversalChatWidget {
       .universal-chat-button:hover {
         transform: scale(1.1);
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-        background: ${this.options.secondaryColor};
       }
 
       .universal-chat-button.chat-open {
         transform: rotate(90deg);
+        background: ${this.options.userMessageColor};
+      }
+
+      .universal-chat-button.chat-open:hover {
+        transform: rotate(90deg) scale(0.9);
       }
 
       /* Unread Badge */
@@ -302,7 +306,7 @@ class UniversalChatWidget {
 
       .message-bubble {
         display: inline-block;
-        max-width: 80%;
+        max-width: 90%;
         padding: 0.75rem 1rem;
         border-radius: 8px;
         word-wrap: break-word;
@@ -525,7 +529,7 @@ class UniversalChatWidget {
         </div>
         <div class="chat-header-actions">
           <button class="chat-header-btn chat-clear-btn" title="Clear chat">↻</button>
-          <button class="chat-header-btn chat-close-btn" title="Close">×</button>
+          <button class="chat-header-btn chat-close-btn" title="Minimize">×</button>
         </div>
       </div>
       ${this.options.showModelInfo ? '<div class="model-info" id="model-info"></div>' : ""}

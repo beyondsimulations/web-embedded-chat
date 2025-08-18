@@ -31,7 +31,8 @@ class UniversalChatWidget {
       chatBackground: options.chatBackground || "#ffffff", // Chat window and input background
       stampColor: options.stampColor || "#df7d7d", // Timestamps and unread badge
       codeBackgroundColor: options.codeBackgroundColor || "#f3f4f6", // Code block backgrounds
-      codeTextColor: options.codeTextColor || "#df7d7d", // Text color for code content
+      codeOpacity: options.codeOpacity || 0.8, // Opacity for code block backgrounds (0.0 to 1.0)
+      codeTextColor: options.codeTextColor || "#2c3532", // Text color for code content
       borderColor: options.borderColor || "#2c3532", // Borders for bubbles and input
       buttonIconColor: options.buttonIconColor || "#ffffff", // Chat button icons
       scrollbarColor: options.scrollbarColor || "#d1d5db", // Scrollbar color
@@ -706,6 +707,7 @@ class UniversalChatWidget {
         text-align: center;
         padding: 0.25rem;
         background: ${this.options.codeBackgroundColor};
+        opacity: ${this.options.codeOpacity};
         margin: 0 1rem;
         border-radius: 2px;
       }
@@ -756,6 +758,7 @@ class UniversalChatWidget {
       /* Markdown support */
       .message-bubble code {
         background: ${this.options.codeBackgroundColor};
+        opacity: ${this.options.codeOpacity};
         padding: 0.125rem 0.25rem;
         border-radius: 2px;
         font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -767,11 +770,13 @@ class UniversalChatWidget {
 
       .message.user .message-bubble code {
         background: ${this.options.codeBackgroundColor};
+        opacity: ${this.options.codeOpacity};
         color: ${this.options.codeTextColor};
       }
 
       .message-bubble pre {
-        background: ${this.options.codeBackgroundColor}CC;
+        background: ${this.options.codeBackgroundColor};
+        opacity: ${this.options.codeOpacity};
         color: ${this.options.codeTextColor};
         padding: 0.5rem;
         margin-top: 0.1rem;
@@ -840,6 +845,7 @@ class UniversalChatWidget {
         padding: 0.25rem;
         border-radius: 3px;
         background: ${this.options.codeBackgroundColor};
+        opacity: ${this.options.codeOpacity};
       }
 
       /* Citation styling */
@@ -856,6 +862,7 @@ class UniversalChatWidget {
 
       .citation-link:hover {
         background: ${this.options.codeBackgroundColor};
+        opacity: ${this.options.codeOpacity};
         color: ${this.options.codeTextColor};
       }
 
@@ -887,6 +894,7 @@ class UniversalChatWidget {
 
       .reference-item.highlighted {
         background: ${this.options.codeBackgroundColor};
+        opacity: ${this.options.codeOpacity};
         padding: 0.5rem;
         border-radius: 2px;
         border-left: 2px solid ${this.options.userColor};

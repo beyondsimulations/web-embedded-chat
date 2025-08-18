@@ -712,11 +712,46 @@ class UniversalChatWidget {
         border-radius: 2px;
       }
 
-      /* Mobile */
-      @media (max-width: 480px) {
+      /* Mobile Fullscreen */
+      @media (max-width: 768px) {
         .universal-chat-window {
-          width: calc(100vw - 40px);
-          height: calc(100vh - 120px);
+          width: 100vw !important;
+          height: 100vh !important;
+          max-height: 100vh !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+        }
+        
+        .universal-chat-window.open {
+          transform: none !important;
+        }
+        
+        .universal-chat-button.chat-open {
+          display: none !important;
+        }
+        
+        .chat-messages {
+          padding-bottom: 120px;
+        }
+        
+        .chat-input-area {
+          bottom: 0;
+          left: 0;
+          right: 0;
+          margin: 0;
+          border-radius: 0;
+          box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .chat-input-container {
+          border-radius: 0;
+          border-left: none;
+          border-right: none;
+          border-bottom: none;
         }
       }
 

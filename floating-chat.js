@@ -773,7 +773,7 @@ class UniversalChatWidget {
       }
 
       .message-bubble pre {
-        background: ${this.options.codeBackgroundColor};
+        background: ${this.options.codeBackgroundColor}CC;
         color: ${this.options.codeTextColor};
         padding: 0.75rem;
         border-radius: 2px;

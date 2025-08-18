@@ -1220,7 +1220,7 @@ class UniversalChatWidget {
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/```([^`]+)```/g, "<pre><code>$1</code></pre>")
+      .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
       .replace(/\n/g, "<br>");
   }
 

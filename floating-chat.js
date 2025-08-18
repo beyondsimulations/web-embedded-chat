@@ -168,7 +168,6 @@ class UniversalChatWidget {
             const docKey = citationNum.toString();
             const docContent = document[docKey] || document[citationNum - 1];
             if (docContent) {
-
               // Create reference text from source metadata and document content
               let referenceText = `<strong>${source.name}</strong>`;
               if (source.description) {
@@ -724,19 +723,19 @@ class UniversalChatWidget {
           border-radius: 0 !important;
           box-shadow: none !important;
         }
-        
+
         .universal-chat-window.open {
           transform: none !important;
         }
-        
+
         .universal-chat-button.chat-open {
           display: none !important;
         }
-        
+
         .chat-messages {
           padding-bottom: 120px;
         }
-        
+
         .chat-input-area {
           bottom: 0;
           left: 0;
@@ -745,7 +744,7 @@ class UniversalChatWidget {
           border-radius: 0;
           box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
         }
-        
+
         .chat-input-container {
           border-radius: 0;
           border-left: none;
@@ -774,7 +773,8 @@ class UniversalChatWidget {
       .message-bubble pre {
         background: ${this.options.codeBackgroundColor}CC;
         color: ${this.options.codeTextColor};
-        padding: 0.75rem;
+        padding: 0.5rem;
+        margin-top: 0.1rem;
         border-radius: 2px;
         overflow-x: auto;
         overflow-y: hidden;

@@ -147,35 +147,87 @@ class UniversalChatWidget {
     let content = messageBubble.innerHTML;
     const citations = {};
 
+    // First extract citation numbers that actually appear in the content
+    const citationMatches = content.match(/\[(\d+)\]/g);
+    const citationNumbers = citationMatches
+      ? citationMatches.map((match) => parseInt(match.slice(1, -1)))
+      : [];
+
     // First try to use structured sources if provided
-    if (sources && sources.length > 0) {
-      // Extract citations from sources data
-      sources.forEach((sourceData, index) => {
-        const citationNum = index + 1;
+    if (sources && sources.length > 0 && citationNumbers.length > 0) {
+      // Extract citations from sources data only for numbers that appear in content
+      sources.forEach((sourceData, sourceIndex) => {
         const source = sourceData.source;
         const document = sourceData.document;
+        const metadata = sourceData.metadata;
 
-        // Create reference text from source metadata
-        let referenceText = `<strong>${source.name}</strong>`;
-        if (source.description) {
-          referenceText += ` - ${source.description}`;
-        }
         if (document) {
-          // Get first document snippet from the numbered keys
-          const documentKeys = Object.keys(document);
-          if (documentKeys.length > 0) {
-            const firstDoc = document[documentKeys[0]];
-            const snippet = firstDoc
-              .substring(0, 200)
-              .replace(/[#*]/g, "")
-              .trim();
-            referenceText += `<br><em>${snippet}...</em>`;
-          }
-        }
+          // Only process document fragments for citation numbers that appear in the text
+          citationNumbers.forEach((citationNum) => {
+            // Convert 1-based citation number to 0-based array index
+            const docIndex = citationNum - 1;
+            if (docIndex >= 0 && docIndex < document.length) {
+              const docContent = document[docIndex];
+              const docKey = docIndex.toString();
 
-        citations[citationNum] = referenceText;
+              // Create reference text from source metadata and document content
+              let referenceText = `<strong>${source.name}</strong>`;
+              if (source.description) {
+                referenceText += ` - ${source.description}`;
+              }
+
+              // Add metadata info if available
+              if (metadata && metadata[docKey]) {
+                const metaInfo = metadata[docKey];
+                if (metaInfo.headings && metaInfo.headings !== "[]") {
+                  try {
+                    let headings = [];
+
+                    // Parse Python-style list format with regex
+                    if (
+                      metaInfo.headings.startsWith("[") &&
+                      metaInfo.headings.endsWith("]")
+                    ) {
+                      // Extract content between quotes using regex
+                      const matches = metaInfo.headings.match(/'([^']*)'/g);
+                      if (matches) {
+                        headings = matches.map((match) => match.slice(1, -1)); // Remove surrounding quotes
+                      }
+                    }
+
+                    if (headings.length > 0) {
+                      referenceText += `<br><strong>Section:</strong> ${headings.join(" > ")}`;
+                    }
+                  } catch (parseError) {
+                    console.warn(
+                      "Failed to parse headings:",
+                      metaInfo.headings,
+                      parseError,
+                    );
+                    // Fallback: just show the raw headings string if it's reasonable
+                    if (metaInfo.headings.length < 100) {
+                      referenceText += `<br><strong>Section:</strong> ${metaInfo.headings}`;
+                    }
+                  }
+                }
+              }
+
+              // Add document snippet
+              const snippet = docContent
+                .substring(0, 200)
+                .replace(/[#*-]/g, "")
+                .replace(/\s+/g, " ")
+                .trim();
+              if (snippet) {
+                referenceText += `<br><em>${snippet}...</em>`;
+              }
+
+              citations[citationNum] = referenceText;
+            }
+          });
+        }
       });
-    } else {
+    } else if (citationNumbers.length === 0 && sources && sources.length > 0) {
       // Fallback: Parse citations from text content
       const citationPattern = /\[(\d+)\]\s*([\s\S]*?)(?=\s*\[\d+\]|$)/g;
       let match;
@@ -213,6 +265,7 @@ class UniversalChatWidget {
     });
 
     // If we have citations, create references section
+
     if (Object.keys(citations).length > 0) {
       let referencesHtml =
         '<div class="references-section"><h4>References:</h4><ol class="references-list">';
@@ -999,10 +1052,20 @@ class UniversalChatWidget {
       const assistantContent =
         data.choices?.[0]?.message?.content || data.response;
 
-      // Extract sources from nested API structure
+      // Extract sources from nested API structure - try multiple possible paths
       let sources = [];
+
+      // Try different possible source paths
       if (data.source?.sources) {
         sources = Object.values(data.source.sources);
+      } else if (data.sources) {
+        sources = Array.isArray(data.sources)
+          ? data.sources
+          : Object.values(data.sources);
+      } else if (data.context?.sources) {
+        sources = Object.values(data.context.sources);
+      } else if (data.choices?.[0]?.message?.sources) {
+        sources = Object.values(data.choices[0].message.sources);
       }
 
       // Debug logging
@@ -1010,6 +1073,10 @@ class UniversalChatWidget {
         console.log("API Response:", data);
         console.log("Sources found:", sources);
         console.log("Content:", assistantContent);
+
+        // Check for citation numbers in content
+        const citationMatches = assistantContent.match(/\[(\d+)\]/g);
+        console.log("Citation numbers found in content:", citationMatches);
       }
 
       this.history.push(

@@ -332,20 +332,34 @@ export default {
 
       // Standard OpenAI response format
       const assistantMessage =
-        data.choices?.[0]?.message?.content || "Sorry, no response generated.";
+        data.choices?.[0]?.message?.content ||
+        data.response ||
+        "Sorry, no response generated.";
 
-      return new Response(
-        JSON.stringify({
-          response: assistantMessage,
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            ...rateLimitHeaders,
-            "Content-Type": "application/json",
-          },
+      // Prepare response with source data
+      const responseData = {
+        response: assistantMessage,
+      };
+
+      // Include source data if present in the API response
+      if (data.source) {
+        responseData.source = data.source;
+      } else if (data.sources) {
+        responseData.sources = data.sources;
+      }
+
+      // Include any other relevant fields that might contain citation data
+      if (data.choices?.[0]?.message?.sources) {
+        responseData.sources = data.choices[0].message.sources;
+      }
+
+      return new Response(JSON.stringify(responseData), {
+        headers: {
+          ...corsHeaders,
+          ...rateLimitHeaders,
+          "Content-Type": "application/json",
         },
-      );
+      });
     } catch (error) {
       secureLog("Worker error occurred:", error.message, env);
 

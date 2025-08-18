@@ -1,1 +1,7 @@
 .env
+_site
+.quarto
+index.qmd
+_quarto.yml
+
+/.quarto/

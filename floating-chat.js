@@ -1219,7 +1219,9 @@ class UniversalChatWidget {
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/\n/g, "<br>");
+      .replace(/\n/g, "<br>")
+      .replace(/(<\/h[1-6]>)<br>/g, "$1")
+      .replace(/(<\/pre>)<br>/g, "$1");
   }
 
   formatTime(date) {

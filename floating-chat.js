@@ -63,7 +63,7 @@ class UniversalChatWidget {
     codeBlocks.forEach((codeBlock) => {
       const copyBtn = document.createElement("button");
       copyBtn.className = "code-copy-btn";
-      copyBtn.textContent = "Copy";
+      copyBtn.textContent = "⧉";
       copyBtn.setAttribute("aria-label", "Copy code");
 
       copyBtn.addEventListener("click", async () => {
@@ -72,11 +72,11 @@ class UniversalChatWidget {
 
         try {
           await navigator.clipboard.writeText(textToCopy);
-          copyBtn.textContent = "Copied!";
+          copyBtn.textContent = "✓";
           copyBtn.classList.add("copied");
 
           setTimeout(() => {
-            copyBtn.textContent = "Copy";
+            copyBtn.textContent = "⧉";
             copyBtn.classList.remove("copied");
           }, 2000);
         } catch (err) {
@@ -88,11 +88,11 @@ class UniversalChatWidget {
           document.execCommand("copy");
           document.body.removeChild(textArea);
 
-          copyBtn.textContent = "Copied!";
+          copyBtn.textContent = "✓";
           copyBtn.classList.add("copied");
 
           setTimeout(() => {
-            copyBtn.textContent = "Copy";
+            copyBtn.textContent = "⧉";
             copyBtn.classList.remove("copied");
           }, 2000);
         }

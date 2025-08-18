@@ -37,6 +37,7 @@ class UniversalChatWidget {
       buttonIconColor: options.buttonIconColor || "#ffffff", // Chat button icons
       scrollbarColor: options.scrollbarColor || "#d1d5db", // Scrollbar color
       inputTextColor: options.inputTextColor || "#1f2937", // Text color in input field
+      inputAreaOpacity: options.inputAreaOpacity || 0.5, // Opacity for input area background (0.0 to 1.0)
 
       // Behavior options
       startOpen: options.startOpen || false,
@@ -339,16 +340,17 @@ class UniversalChatWidget {
   ensureViewportMeta() {
     // Check if viewport meta tag exists and includes viewport-fit=cover
     let viewportMeta = document.querySelector('meta[name="viewport"]');
-    
+
     if (!viewportMeta) {
       // Create viewport meta tag if it doesn't exist
-      viewportMeta = document.createElement('meta');
-      viewportMeta.name = 'viewport';
-      viewportMeta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+      viewportMeta = document.createElement("meta");
+      viewportMeta.name = "viewport";
+      viewportMeta.content =
+        "width=device-width, initial-scale=1.0, viewport-fit=cover";
       document.head.appendChild(viewportMeta);
-    } else if (!viewportMeta.content.includes('viewport-fit=cover')) {
+    } else if (!viewportMeta.content.includes("viewport-fit=cover")) {
       // Add viewport-fit=cover if not present
-      viewportMeta.content = viewportMeta.content + ', viewport-fit=cover';
+      viewportMeta.content = viewportMeta.content + ", viewport-fit=cover";
     }
   }
 
@@ -662,7 +664,7 @@ class UniversalChatWidget {
         bottom: 1rem;
         left: 1rem;
         right: 1rem;
-        background: ${this.options.chatBackground};
+        background: ${this.hexToRgba(this.options.chatBackground, this.options.inputAreaOpacity)};
         border-radius: 2px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         z-index: 10;

@@ -336,7 +336,24 @@ class UniversalChatWidget {
     return model.substring(0, 50); // Limit length
   }
 
+  ensureViewportMeta() {
+    // Check if viewport meta tag exists and includes viewport-fit=cover
+    let viewportMeta = document.querySelector('meta[name="viewport"]');
+    
+    if (!viewportMeta) {
+      // Create viewport meta tag if it doesn't exist
+      viewportMeta = document.createElement('meta');
+      viewportMeta.name = 'viewport';
+      viewportMeta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+      document.head.appendChild(viewportMeta);
+    } else if (!viewportMeta.content.includes('viewport-fit=cover')) {
+      // Add viewport-fit=cover if not present
+      viewportMeta.content = viewportMeta.content + ', viewport-fit=cover';
+    }
+  }
+
   init() {
+    this.ensureViewportMeta();
     this.injectStyles();
     this.createWidget();
     this.bindEvents();
@@ -742,23 +759,24 @@ class UniversalChatWidget {
         }
 
         .chat-messages {
-          padding-bottom: 120px;
+          padding-bottom: calc(120px + env(safe-area-inset-bottom, 0));
         }
 
         .chat-input-area {
-          bottom: 0;
-          left: 0;
-          right: 0;
+          bottom: calc(1rem + env(safe-area-inset-bottom, 0));
+          left: 1rem;
+          right: 1rem;
+          width: auto;
+          max-width: none;
           margin: 0;
-          border-radius: 0;
-          box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+          border-radius: 2px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          padding-bottom: 0;
         }
 
         .chat-input-container {
-          border-radius: 0;
-          border-left: none;
-          border-right: none;
-          border-bottom: none;
+          border-radius: 2px;
+          border: 1px solid ${this.options.borderColor};
         }
       }
 

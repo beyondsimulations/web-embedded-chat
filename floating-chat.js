@@ -59,6 +59,14 @@ class UniversalChatWidget {
     this.init();
   }
 
+  // Helper function to convert hex color to rgba with opacity
+  hexToRgba(hex, opacity) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+
   addCopyButtonsToCodeBlocks(messageElement) {
     const codeBlocks = messageElement.querySelectorAll("pre");
     codeBlocks.forEach((codeBlock) => {
@@ -706,8 +714,7 @@ class UniversalChatWidget {
         color: ${this.options.stampColor};
         text-align: center;
         padding: 0.25rem;
-        background: ${this.options.codeBackgroundColor};
-        opacity: ${this.options.codeOpacity};
+        background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
         margin: 0 1rem;
         border-radius: 2px;
       }
@@ -757,8 +764,7 @@ class UniversalChatWidget {
 
       /* Markdown support */
       .message-bubble code {
-        background: ${this.options.codeBackgroundColor};
-        opacity: ${this.options.codeOpacity};
+        background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
         padding: 0.125rem 0.25rem;
         border-radius: 2px;
         font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -769,14 +775,12 @@ class UniversalChatWidget {
       }
 
       .message.user .message-bubble code {
-        background: ${this.options.codeBackgroundColor};
-        opacity: ${this.options.codeOpacity};
+        background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
         color: ${this.options.codeTextColor};
       }
 
       .message-bubble pre {
-        background: ${this.options.codeBackgroundColor};
-        opacity: ${this.options.codeOpacity};
+        background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
         color: ${this.options.codeTextColor};
         padding: 0.5rem;
         margin-top: 0.1rem;
@@ -844,8 +848,7 @@ class UniversalChatWidget {
         border: 1px solid ${this.options.stampColor};
         padding: 0.25rem;
         border-radius: 3px;
-        background: ${this.options.codeBackgroundColor};
-        opacity: ${this.options.codeOpacity};
+        background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
       }
 
       /* Citation styling */
@@ -861,8 +864,7 @@ class UniversalChatWidget {
       }
 
       .citation-link:hover {
-        background: ${this.options.codeBackgroundColor};
-        opacity: ${this.options.codeOpacity};
+        background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
         color: ${this.options.codeTextColor};
       }
 
@@ -893,8 +895,7 @@ class UniversalChatWidget {
       }
 
       .reference-item.highlighted {
-        background: ${this.options.codeBackgroundColor};
-        opacity: ${this.options.codeOpacity};
+        background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
         padding: 0.5rem;
         border-radius: 2px;
         border-left: 2px solid ${this.options.userColor};

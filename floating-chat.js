@@ -564,7 +564,6 @@ class UniversalChatWidget {
         padding: 0.75rem 1rem;
         border-radius: 2px;
         word-wrap: break-word;
-        line-height: 1.5;
       }
 
       .message-bubble h1,
@@ -661,7 +660,6 @@ class UniversalChatWidget {
         resize: none;
         font-family: inherit;
         font-size: 0.95rem;
-        line-height: 1.4;
         max-height: 100px;
         background: transparent;
         color: ${this.options.inputTextColor};
@@ -750,7 +748,6 @@ class UniversalChatWidget {
         max-width: 100%;
         white-space: pre-wrap;
         word-break: break-word;
-        line-height: 1.4;
         position: relative;
         font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         border: 1px solid ${this.options.borderColor};

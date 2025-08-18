@@ -3,5 +3,5 @@ _site
 .quarto
 index.qmd
 _quarto.yml
-
+CLAUDE.md
 /.quarto/

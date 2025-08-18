@@ -164,11 +164,10 @@ class UniversalChatWidget {
         if (document) {
           // Only process document fragments for citation numbers that appear in the text
           citationNumbers.forEach((citationNum) => {
-            // Convert 1-based citation number to 0-based array index
-            const docIndex = citationNum - 1;
-            if (docIndex >= 0 && docIndex < document.length) {
-              const docContent = document[docIndex];
-              const docKey = docIndex.toString();
+            // Use citation number as key to find the corresponding document
+            const docKey = citationNum.toString();
+            const docContent = document[docKey] || document[citationNum - 1];
+            if (docContent) {
 
               // Create reference text from source metadata and document content
               let referenceText = `<strong>${source.name}</strong>`;
@@ -779,7 +778,6 @@ class UniversalChatWidget {
         border-radius: 2px;
         overflow-x: auto;
         overflow-y: hidden;
-        margin: 0.5rem 0;
         max-width: 100%;
         white-space: pre-wrap;
         word-break: break-word;

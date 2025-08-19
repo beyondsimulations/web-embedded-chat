@@ -31,13 +31,13 @@ class UniversalChatWidget {
       chatBackground: options.chatBackground || "#ffffff", // Chat window and input background
       stampColor: options.stampColor || "#df7d7d", // Timestamps and unread badge
       codeBackgroundColor: options.codeBackgroundColor || "#f3f4f6", // Code block backgrounds
-      codeOpacity: options.codeOpacity || 0.8, // Opacity for code block backgrounds (0.0 to 1.0)
+      codeOpacity: options.codeOpacity || 0.85, // Opacity for code block backgrounds (0.0 to 1.0)
       codeTextColor: options.codeTextColor || "#2c3532", // Text color for code content
       borderColor: options.borderColor || "#2c3532", // Borders for bubbles and input
       buttonIconColor: options.buttonIconColor || "#ffffff", // Chat button icons
       scrollbarColor: options.scrollbarColor || "#d1d5db", // Scrollbar color
       inputTextColor: options.inputTextColor || "#1f2937", // Text color in input field
-      inputAreaOpacity: options.inputAreaOpacity || 0.5, // Opacity for input area background (0.0 to 1.0)
+      inputAreaOpacity: options.inputAreaOpacity || 0.95, // Opacity for input area background (0.0 to 1.0)
 
       // Behavior options
       startOpen: options.startOpen || false,
@@ -675,7 +675,7 @@ class UniversalChatWidget {
         border: 1px solid ${this.options.borderColor};
         border-radius: 2px;
         overflow: hidden;
-        background: ${this.options.chatBackground};
+        background: transparent;
         padding: 0;
       }
 

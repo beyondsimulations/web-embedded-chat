@@ -57,7 +57,7 @@ You can either download `floating-chat.js` or load it directly from CDN:
 </head>
 <body>
     <!-- Your content -->
-    <script src="https://cdn.jsdelivr.net/gh/beyondsimulations/web-embedded-chat@main/floating-chat.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/beyondsimulations/web-embedded-chat@latest/floating-chat.js"></script>
     <script>
         new UniversalChatWidget({
             title: 'AI Assistant',

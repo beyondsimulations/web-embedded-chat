@@ -18,16 +18,27 @@ export default {
     // Initialize rate limit headers (will be populated later)
     let rateLimitHeaders = {};
 
-    // Smart CORS: automatically allow subdomains and paths
+    // Simplified CORS: restrict to allowed origins
     const origin = request.headers.get("Origin") || "";
     secureLog("Origin received:", origin, env);
 
+    // Define allowed paths
+    const allowedPaths = ["/api"];
+    const url = new URL(request.url);
+    if (!allowedPaths.includes(url.pathname)) {
+      return new Response(
+        JSON.stringify({ error: "Path not allowed. Only /api is accessible." }),
+        {
+          status: 403,
+          headers: corsHeaders,
+        },
+      );
+    }
+
     // Define your exact allowed domains (no subdomains allowed)
-    const allowedDomains = [
-      "beyondsimulations.github.io", // Allows only beyondsimulations.github.io/* (not subdomains)
-      // Add your custom domain if you have one:
-      // 'yourdomain.com'  // Allows only yourdomain.com/* (not subdomains)
-    ];
+    const allowedDomains = (env.ALLOWED_DOMAINS || "")
+      .split(",")
+      .map((domain) => domain.trim());
 
     // Determine allowed origin based on environment and origin
     let allowedOrigin = "https://localhost:3000"; // Default fallback
@@ -90,6 +101,15 @@ export default {
       "Access-Control-Allow-Origin": allowedOrigin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "86400", // Cache preflight response for 24 hours
+    };
+
+    const securityHeaders = {
+      "Content-Security-Policy": "default-src 'none';",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Strict-Transport-Security":
+        "max-age=31536000; includeSubDomains; preload",
     };
 
     // Handle preflight
@@ -99,13 +119,12 @@ export default {
       });
     }
 
-    // Only accept POST
-    if (request.method !== "POST") {
+    // Only accept POST and OPTIONS
+    if (!["POST", "OPTIONS"].includes(request.method)) {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,
         headers: {
           ...corsHeaders,
-          ...rateLimitHeaders,
           "Content-Type": "application/json",
         },
       });
@@ -357,6 +376,7 @@ export default {
         headers: {
           ...corsHeaders,
           ...rateLimitHeaders,
+          ...securityHeaders,
           "Content-Type": "application/json",
         },
       });
@@ -384,6 +404,7 @@ export default {
           headers: {
             ...corsHeaders,
             ...rateLimitHeaders,
+            ...securityHeaders,
             "Content-Type": "application/json",
           },
         },

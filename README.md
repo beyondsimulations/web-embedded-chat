@@ -34,14 +34,11 @@ A simple floating chat widget that works with any OpenAI-compatible API. Add AI 
    # Development (optional)
    ENVIRONMENT=development         # Enables debug logging
    ```
-4. Update allowed domains in worker (line 26-30):
-   ```javascript
-   const allowedDomains = [
-     "beyondsimulations.github.io",  // Your GitHub Pages domain
-     "yourdomain.com",               // Your custom domain
-     // Add more domains as needed
-   ];
-   ```
+4. Configure allowed domains and paths in the worker:
+
+- Add your allowed domains as a comma-separated list in the `ALLOWED_DOMAINS` environment variable (e.g., `beyondsimulations.github.io,yourdomain.com`).
+- The worker will automatically restrict requests to the `/api` path and validate the origin against the allowed domains.
+
 5. Deploy and note your Worker URL
 
 ### 2. Add to Website
@@ -63,7 +60,7 @@ You can either download `floating-chat.js` or load it directly from CDN:
             title: 'AI Assistant',
             subtitle: 'Ask me anything!',
             primaryColor: '#ff7000',
-            apiEndpoint: 'https://your-worker.workers.dev'
+            apiEndpoint: 'https://your-worker.workers.dev/api'
         });
     </script>
 </body>
@@ -85,7 +82,7 @@ You can either download `floating-chat.js` or load it directly from CDN:
             title: 'AI Assistant',
             subtitle: 'Ask me anything!',
             primaryColor: '#ff7000',
-            apiEndpoint: 'https://your-worker.workers.dev'
+            apiEndpoint: 'https://your-worker.workers.dev/api'
         });
     </script>
 </body>
@@ -218,7 +215,7 @@ Code blocks automatically include copy-to-clipboard functionality:
 2. Verify environment variables in Cloudflare Workers dashboard
 3. Check worker logs for detailed error messages
 
-**CORS issues**: Add your domain to `allowedDomains` array in worker
+**CORS issues**: Ensure your domain is added to the `ALLOWED_DOMAINS` environment variable (comma-separated) in the Cloudflare Worker configuration. Also, confirm that requests are made to `/api` as other paths are restricted.
 
 **Rate limiting**: Check worker logs for rate limit messages. Adjust `RATE_LIMIT_*` environment variables if needed
 
@@ -234,7 +231,7 @@ Code blocks automatically include copy-to-clipboard functionality:
 
 The Cloudflare Worker includes comprehensive security measures:
 
-- **Domain Validation**: Strict CORS policy with exact domain matching
+- **Domain Validation**: Strict CORS policy with exact domain matching (configured via the `ALLOWED_DOMAINS` environment variable, supporting comma-separated domains) and path restriction to `/api`
 - **Rate Limiting**: Configurable request limits with burst allowance
 - **Input Sanitization**: Model name validation and message length limits
 - **Secure Logging**: Prevents sensitive data exposure in production

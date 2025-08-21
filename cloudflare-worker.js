@@ -3,6 +3,16 @@ function secureLog(message, sensitiveData = null, env = null) {
   const isDevelopment =
     env?.ENVIRONMENT === "development" || env?.NODE_ENV === "development";
 
+  // Helper to extract AI provider from API endpoint if not explicitly set
+  function getAIProvider(apiEndpoint) {
+    try {
+      const hostname = new URL(apiEndpoint).hostname;
+      return hostname.split(".")[1] || "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+
   if (isDevelopment && sensitiveData) {
     console.log(message, sensitiveData);
   } else {
@@ -12,6 +22,31 @@ function secureLog(message, sensitiveData = null, env = null) {
 
 export default {
   async fetch(request, env) {
+    // PostHog tracing configuration
+    const posthogConfig = {
+      apiKey: env.POSTHOG_API_KEY,
+      endpoint: env.POSTHOG_ENDPOINT,
+      eventName: "$ai_generation",
+      provider: env.AI_PROVIDER || null, // Optional: AI provider from .env
+    };
+
+    // Skip PostHog tracing if not configured
+    if (!posthogConfig.apiKey || !posthogConfig.endpoint) {
+      console.log("PostHog tracing is disabled. Missing configuration.");
+      secureLog("PostHog is not configured. Skipping tracing.", null, env);
+    }
+
+    // Helper function to generate a UUID for $ai_trace_id if not provided
+    function generateUUID() {
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+        /[xy]/g,
+        function (c) {
+          const r = (Math.random() * 16) | 0,
+            v = c === "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        },
+      );
+    }
     // Add comprehensive logging for debugging
     secureLog("Worker started, method:", request.method, env);
 
@@ -333,6 +368,7 @@ export default {
       secureLog("Using model:", sanitizedModel);
 
       // Call OpenAI-compatible API
+      const startTime = Date.now(); // Start timing for latency measurement
       const response = await fetch(env.API_ENDPOINT, {
         method: "POST",
         headers: {
@@ -348,6 +384,68 @@ export default {
       }
 
       const data = await response.json();
+      const latencyEndTime = Date.now(); // End timing for latency measurement
+
+      // Construct PostHog tracing payload
+      if (posthogConfig.apiKey && posthogConfig.endpoint) {
+        const posthogPayload = {
+          api_key: posthogConfig.apiKey,
+          event: posthogConfig.eventName,
+          properties: {
+            distinct_id: clientIP,
+            $ai_trace_id: data.id || generateUUID(),
+            $ai_model: sanitizedModel,
+            $ai_provider:
+              posthogConfig.provider || getAIProvider(env.API_ENDPOINT),
+            $ai_input: JSON.stringify(messages),
+            $ai_input_tokens: data.usage?.prompt_tokens || 0,
+            $ai_output_choices: JSON.stringify(data.choices || []),
+            $ai_output_tokens: data.usage?.completion_tokens || 0,
+            $ai_latency: (latencyEndTime - startTime) / 1000,
+            $ai_http_status: response.status,
+            $ai_base_url: env.API_ENDPOINT,
+            $ai_is_error: response.status !== 200,
+            $ai_error:
+              response.status !== 200 ? data.error || "Unknown error" : null,
+          },
+          timestamp: new Date().toISOString(),
+        };
+
+        // Send tracing data to PostHog
+        try {
+          await fetch(posthogConfig.endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(posthogPayload),
+          });
+        } catch (posthogError) {
+          secureLog("PostHog tracing failed:", posthogError.message, env);
+        }
+      }
+
+      // Send tracing data to PostHog
+      try {
+        await fetch(posthogConfig.endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(posthogPayload),
+        });
+      } catch (posthogError) {
+        secureLog("PostHog tracing failed:", posthogError.message, env);
+      }
+
+      // PostHog tracing payload
+
+      // Send tracing data to PostHog
+      try {
+        await fetch(posthogConfig.endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(posthogPayload),
+        });
+      } catch (posthogError) {
+        secureLog("PostHog tracing failed:", posthogError.message, env);
+      }
 
       // Standard OpenAI response format
       const assistantMessage =

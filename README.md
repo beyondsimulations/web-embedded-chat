@@ -22,17 +22,27 @@ A simple floating chat widget that works with any OpenAI-compatible API. Add AI 
 2. Create a new Worker and paste `cloudflare-worker.js`
 3. Set environment variables:
    ```
+   # Required: The API endpoint for the LLM provider
    API_ENDPOINT=https://api.mistral.ai/v1/chat/completions
+   # Required: The API key for authenticating with the LLM provider
    API_KEY=your-mistral-api-key
+   # Optional: The system prompt to guide the LLM's behavior
    SYSTEM_PROMPT=You are a helpful assistant.
 
-   # Rate Limiting (optional)
+   # Optional: Rate Limiting Configuration
    RATE_LIMIT_REQUESTS=10          # Requests per window (default: 10)
    RATE_LIMIT_WINDOW=60            # Time window in seconds (default: 60)
    RATE_LIMIT_BURST=3              # Burst allowance (default: 3)
 
-   # Development (optional)
+   # Required: Set to "development" or "production" to control logging and behavior
    ENVIRONMENT=development         # Enables debug logging
+
+   # Optional: Specify the AI provider (e.g., openai, anthropic). If not set, it will be derived from the API endpoint.
+   AI_PROVIDER=openai
+
+   # Optional: PostHog configuration for analytics
+   POSTHOG_API_KEY=your-posthog-api-key
+   POSTHOG_ENDPOINT=https://eu.i.posthog.com/i/v0/e/
    ```
 4. Configure allowed domains and paths in the worker:
 
@@ -212,12 +222,16 @@ Code blocks automatically include copy-to-clipboard functionality:
      -H "Content-Type: application/json" \
      -d '{"model":"mistral-small-latest","messages":[{"role":"user","content":"test"}],"max_tokens":10}'
    ```
-2. Verify environment variables in Cloudflare Workers dashboard
-3. Check worker logs for detailed error messages
+2. Verify required environment variables in the Cloudflare Workers dashboard:
+   - `API_ENDPOINT`
+   - `API_KEY`
+   - `ENVIRONMENT`
+3. If using PostHog, ensure `POSTHOG_API_KEY` and `POSTHOG_ENDPOINT` are set.
+4. Check worker logs for detailed error messages.
 
 **CORS issues**: Ensure your domain is added to the `ALLOWED_DOMAINS` environment variable (comma-separated) in the Cloudflare Worker configuration. Also, confirm that requests are made to `/api` as other paths are restricted.
 
-**Rate limiting**: Check worker logs for rate limit messages. Adjust `RATE_LIMIT_*` environment variables if needed
+**Rate limiting**: Check worker logs for rate limit messages. Adjust `RATE_LIMIT_*` environment variables if needed. Ensure `ENVIRONMENT` is set to `development` for detailed logs.
 
 **Common fixes**:
 - Remove trailing slashes from API_ENDPOINT
@@ -234,7 +248,7 @@ The Cloudflare Worker includes comprehensive security measures:
 - **Domain Validation**: Strict CORS policy with exact domain matching (configured via the `ALLOWED_DOMAINS` environment variable, supporting comma-separated domains) and path restriction to `/api`
 - **Rate Limiting**: Configurable request limits with burst allowance
 - **Input Sanitization**: Model name validation and message length limits
-- **Secure Logging**: Prevents sensitive data exposure in production
+- **Secure Logging**: Prevents sensitive data exposure in production while logging operational details for debugging
 - **HTTPS Enforcement**: Automatic protocol validation
 - **Development Mode**: Separate security policies for development vs production
 

@@ -1085,6 +1085,10 @@ class UniversalChatWidget {
     this.sendBtn.disabled = true;
 
     this.showTyping();
+    
+    if (this.options.debug) {
+      console.log("Client sending traceId:", this.traceId);
+    }
 
     try {
       const response = await fetch(this.options.apiEndpoint, {
@@ -1107,6 +1111,9 @@ class UniversalChatWidget {
       // Store trace ID from server response for conversation continuity
       if (data.traceId) {
         this.traceId = data.traceId;
+        if (this.options.debug) {
+          console.log("Client received traceId from server:", data.traceId);
+        }
       }
 
       // Update model info if available
@@ -1296,14 +1303,17 @@ class UniversalChatWidget {
   }
 
   saveState() {
-    sessionStorage.setItem(
-      "universalChatState",
-      JSON.stringify({
-        history: this.history,
-        hasInteracted: this.hasInteracted,
-        traceId: this.traceId, // Persist trace ID for conversation continuity
-      }),
-    );
+    const stateToSave = {
+      history: this.history,
+      hasInteracted: this.hasInteracted,
+      traceId: this.traceId, // Persist trace ID for conversation continuity
+    };
+    
+    if (this.options.debug) {
+      console.log("Client saving state with traceId:", this.traceId);
+    }
+    
+    sessionStorage.setItem("universalChatState", JSON.stringify(stateToSave));
   }
 
   restoreState() {
@@ -1313,6 +1323,10 @@ class UniversalChatWidget {
       this.history = state.history || [];
       this.hasInteracted = state.hasInteracted || false;
       this.traceId = state.traceId || null; // Restore trace ID for conversation continuity
+      
+      if (this.options.debug) {
+        console.log("Client restored traceId from sessionStorage:", this.traceId);
+      }
 
       if (this.history.length > 0) {
         this.messagesEl.innerHTML = "";

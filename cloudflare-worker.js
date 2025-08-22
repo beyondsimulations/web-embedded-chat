@@ -266,6 +266,7 @@ export default {
         body.message?.length,
         env,
       );
+      secureLog("Request body traceId received:", body.traceId, env);
 
       // Basic validation
       if (!body || typeof body !== "object") {
@@ -307,11 +308,17 @@ export default {
 
       // Handle trace ID for consistent conversation tracking
       let traceId = body.traceId;
-      if (!traceId || typeof traceId !== "string") {
+      secureLog("Raw traceId from body:", body.traceId, env);
+      secureLog("traceId type:", typeof traceId, env);
+      secureLog("traceId truthy?:", !!traceId, env);
+      secureLog("traceId is null?:", traceId === null, env);
+      secureLog("traceId is undefined?:", traceId === undefined, env);
+      
+      if (!traceId || typeof traceId !== "string" || traceId === "null") {
         traceId = generateUUID();
-        secureLog("Generated new trace ID for conversation", traceId, env);
+        secureLog("Generated new trace ID for conversation:", traceId, env);
       } else {
-        secureLog("Using existing trace ID for conversation", traceId, env);
+        secureLog("Using existing trace ID for conversation:", traceId, env);
       }
 
       // Sanitize model name (same validation as frontend)
@@ -447,6 +454,8 @@ export default {
         response: assistantMessage,
         traceId: traceId, // Return trace ID so client can persist it
       };
+      
+      secureLog("Returning traceId to client:", traceId, env);
 
       // Include source data if present in the API response
       if (data.source) {

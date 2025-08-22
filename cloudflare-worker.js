@@ -301,6 +301,15 @@ export default {
         });
       }
 
+      // Handle trace ID for consistent conversation tracking
+      let traceId = body.traceId;
+      if (!traceId || typeof traceId !== "string") {
+        traceId = generateUUID();
+        secureLog("Generated new trace ID for conversation", traceId, env);
+      } else {
+        secureLog("Using existing trace ID for conversation", traceId, env);
+      }
+
       // Sanitize model name (same validation as frontend)
       if (!/^[a-zA-Z0-9\-_.]+$/.test(body.model)) {
         console.error("Invalid model format");
@@ -393,7 +402,7 @@ export default {
           event: posthogConfig.eventName,
           properties: {
             distinct_id: clientIP,
-            $ai_trace_id: data.id || generateUUID(),
+            $ai_trace_id: traceId,
             $ai_model: sanitizedModel,
             $ai_provider:
               posthogConfig.provider || getAIProvider(env.API_ENDPOINT),
@@ -423,30 +432,6 @@ export default {
         }
       }
 
-      // Send tracing data to PostHog
-      try {
-        await fetch(posthogConfig.endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(posthogPayload),
-        });
-      } catch (posthogError) {
-        secureLog("PostHog tracing failed:", posthogError.message, env);
-      }
-
-      // PostHog tracing payload
-
-      // Send tracing data to PostHog
-      try {
-        await fetch(posthogConfig.endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(posthogPayload),
-        });
-      } catch (posthogError) {
-        secureLog("PostHog tracing failed:", posthogError.message, env);
-      }
-
       // Standard OpenAI response format
       const assistantMessage =
         data.choices?.[0]?.message?.content ||
@@ -456,6 +441,7 @@ export default {
       // Prepare response with source data
       const responseData = {
         response: assistantMessage,
+        traceId: traceId, // Return trace ID so client can persist it
       };
 
       // Include source data if present in the API response

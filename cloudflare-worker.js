@@ -1,17 +1,17 @@
+// Helper to extract AI provider from API endpoint if not explicitly set
+function getAIProvider(apiEndpoint) {
+  try {
+    const hostname = new URL(apiEndpoint).hostname;
+    return hostname.split(".")[1] || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 // Controlled logging helper to prevent information disclosure
 function secureLog(message, sensitiveData = null, env = null) {
   const isDevelopment =
     env?.ENVIRONMENT === "development" || env?.NODE_ENV === "development";
-
-  // Helper to extract AI provider from API endpoint if not explicitly set
-  function getAIProvider(apiEndpoint) {
-    try {
-      const hostname = new URL(apiEndpoint).hostname;
-      return hostname.split(".")[1] || "unknown";
-    } catch {
-      return "unknown";
-    }
-  }
 
   if (isDevelopment && sensitiveData) {
     console.log(message, sensitiveData);
@@ -53,6 +53,14 @@ export default {
     // Initialize rate limit headers (will be populated later)
     let rateLimitHeaders = {};
 
+    // Initialize CORS headers with default origin (will be updated later)
+    let corsHeaders = {
+      "Access-Control-Allow-Origin": "https://localhost:3000",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "86400", // Cache preflight response for 24 hours
+    };
+
     // Simplified CORS: restrict to allowed origins
     const origin = request.headers.get("Origin") || "";
     secureLog("Origin received:", origin, env);
@@ -82,10 +90,12 @@ export default {
     const isDevelopment =
       env.ENVIRONMENT === "development" || env.NODE_ENV === "development";
 
+
     if (!origin || origin === "null") {
       // Handle null origin (local files, some dev tools)
       // Allow in development, restrict in production
       allowedOrigin = isDevelopment ? "*" : "https://localhost:3000";
+      corsHeaders["Access-Control-Allow-Origin"] = allowedOrigin;
     } else {
       // Check if origin matches any allowed domain (exact domain match, no subdomains)
       let isAllowed = false;
@@ -122,6 +132,7 @@ export default {
 
       if (isAllowed) {
         allowedOrigin = origin;
+        corsHeaders["Access-Control-Allow-Origin"] = allowedOrigin;
         secureLog("Origin validation passed for:", allowedOrigin, env);
       } else {
         secureLog(
@@ -131,13 +142,6 @@ export default {
         );
       }
     }
-
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": allowedOrigin,
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Max-Age": "86400", // Cache preflight response for 24 hours
-    };
 
     const securityHeaders = {
       "Content-Security-Policy": "default-src 'none';",

@@ -360,6 +360,7 @@ class UniversalChatWidget {
     this.injectStyles();
     this.createWidget();
     this.bindEvents();
+    this.setupVisualViewportHandlers();
     this.restoreState();
 
     if (this.options.startOpen && !this.hasInteracted) {
@@ -745,6 +746,8 @@ class UniversalChatWidget {
           width: 100vw !important;
           height: 100vh !important;
           max-height: 100vh !important;
+          height: 100dvh !important;
+          max-height: 100dvh !important;
           top: 0 !important;
           left: 0 !important;
           right: 0 !important;
@@ -762,11 +765,13 @@ class UniversalChatWidget {
         }
 
         .chat-messages {
-          padding-bottom: calc(120px + env(safe-area-inset-bottom, 0));
+          padding-bottom: calc(120px + constant(safe-area-inset-bottom));
+          padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
         }
 
         .chat-input-area {
-          bottom: calc(1rem + env(safe-area-inset-bottom, 0));
+          bottom: calc(1rem + constant(safe-area-inset-bottom));
+          bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
           left: 1rem;
           right: 1rem;
           width: auto;
@@ -1037,6 +1042,13 @@ class UniversalChatWidget {
       this.autoResizeInput();
     });
 
+    // Ensure the input stays visible when the iOS keyboard/address bar shows
+    this.inputEl.addEventListener("focus", () => {
+      setTimeout(() => {
+        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      }, 50);
+    });
+
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && this.isOpen) {
         this.close();
@@ -1085,7 +1097,7 @@ class UniversalChatWidget {
     this.sendBtn.disabled = true;
 
     this.showTyping();
-    
+
     if (this.options.debug) {
       console.log("Client sending traceId:", this.traceId);
     }
@@ -1248,6 +1260,91 @@ class UniversalChatWidget {
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
 
+  setupVisualViewportHandlers() {
+    const isMobile = () =>
+      window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
+
+    const clearOverrides = () => {
+      if (this.window) {
+        this.window.style.removeProperty("height");
+        this.window.style.removeProperty("max-height");
+      }
+      if (this.messagesEl) {
+        this.messagesEl.style.removeProperty("padding-bottom");
+      }
+      const inputArea =
+        this.window && this.window.querySelector(".chat-input-area");
+      if (inputArea) {
+        inputArea.style.removeProperty("bottom");
+      }
+    };
+
+    const updateAppHeight = () => {
+      if (!isMobile()) {
+        clearOverrides();
+        return;
+      }
+
+      const vh = window.visualViewport
+        ? window.visualViewport.height
+        : window.innerHeight;
+
+      if (this.window) {
+        // Use inline !important to beat stylesheet !important
+        this.window.style.setProperty("height", vh + "px", "important");
+        this.window.style.setProperty("max-height", vh + "px", "important");
+      }
+    };
+
+    const updateKeyboardOffsets = () => {
+      if (!this.window) return;
+
+      if (!isMobile()) {
+        clearOverrides();
+        return;
+      }
+
+      let keyboard = 0;
+      if (window.visualViewport) {
+        const vv = window.visualViewport;
+        keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      }
+
+      const inputArea = this.window.querySelector(".chat-input-area");
+      if (inputArea) {
+        inputArea.style.bottom = `calc(1rem + env(safe-area-inset-bottom, 0px) + ${Math.round(keyboard)}px)`;
+      }
+
+      if (this.messagesEl) {
+        this.messagesEl.style.paddingBottom = `calc(120px + env(safe-area-inset-bottom, 0px) + ${Math.round(keyboard)}px)`;
+        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      }
+    };
+
+    const updateAll = () => {
+      if (!isMobile()) {
+        clearOverrides();
+      } else {
+        updateAppHeight();
+        updateKeyboardOffsets();
+      }
+    };
+
+    updateAll();
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", updateAll);
+      window.visualViewport.addEventListener("scroll", updateAll);
+    }
+
+    window.addEventListener("orientationchange", () => {
+      setTimeout(updateAll, 300);
+    });
+
+    // Clear/refresh overrides when resizing across the mobile/desktop breakpoint
+    window.addEventListener("resize", updateAll);
+  }
+
   formatMessage(content) {
     const escaped = content
       .replace(/&/g, "&amp;")
@@ -1308,11 +1405,11 @@ class UniversalChatWidget {
       hasInteracted: this.hasInteracted,
       traceId: this.traceId, // Persist trace ID for conversation continuity
     };
-    
+
     if (this.options.debug) {
       console.log("Client saving state with traceId:", this.traceId);
     }
-    
+
     sessionStorage.setItem("universalChatState", JSON.stringify(stateToSave));
   }
 
@@ -1323,9 +1420,12 @@ class UniversalChatWidget {
       this.history = state.history || [];
       this.hasInteracted = state.hasInteracted || false;
       this.traceId = state.traceId || null; // Restore trace ID for conversation continuity
-      
+
       if (this.options.debug) {
-        console.log("Client restored traceId from sessionStorage:", this.traceId);
+        console.log(
+          "Client restored traceId from sessionStorage:",
+          this.traceId,
+        );
       }
 
       if (this.history.length > 0) {

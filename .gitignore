@@ -6,3 +6,5 @@ _quarto.yml
 CLAUDE.md
 /.quarto/
 .DS_Store
+
+**/*.quarto_ipynb

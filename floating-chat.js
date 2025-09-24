@@ -1279,6 +1279,28 @@ class UniversalChatWidget {
       }
     };
 
+    // 100vh probe element to measure iOS URL bar overlay height
+    let __chatVhProbe = null;
+    const ensureVhProbe = () => {
+      if (!__chatVhProbe) {
+        __chatVhProbe = document.createElement("div");
+        __chatVhProbe.setAttribute("aria-hidden", "true");
+        __chatVhProbe.style.position = "fixed";
+        __chatVhProbe.style.top = "0";
+        __chatVhProbe.style.left = "0";
+        __chatVhProbe.style.width = "1px";
+        __chatVhProbe.style.height = "100vh";
+        __chatVhProbe.style.pointerEvents = "none";
+        __chatVhProbe.style.opacity = "0";
+        __chatVhProbe.style.zIndex = "-1";
+        document.body.appendChild(__chatVhProbe);
+      }
+    };
+    const getVhProbeHeight = () => {
+      ensureVhProbe();
+      return __chatVhProbe.getBoundingClientRect().height;
+    };
+
     const updateAppHeight = () => {
       if (!isMobile()) {
         clearOverrides();
@@ -1305,19 +1327,65 @@ class UniversalChatWidget {
       }
 
       let keyboard = 0;
+      let vv = null;
       if (window.visualViewport) {
-        const vv = window.visualViewport;
+        vv = window.visualViewport;
         keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       }
 
-      const inputArea = this.window.querySelector(".chat-input-area");
-      if (inputArea) {
-        inputArea.style.bottom = `calc(1rem + env(safe-area-inset-bottom, 0px) + ${Math.round(keyboard)}px)`;
+      // iOS bottom overlay fallback when keyboard is not open (all iOS browsers)
+      const ua = navigator.userAgent || navigator.vendor || "";
+      const isIOS =
+        /iPad|iPhone|iPod/.test(ua) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+      // If keyboard isn't detected but we're on iOS, add padding
+      // to avoid the bottom URL bar "pill" overlaying the input.
+      let overlay = 0;
+      if (isIOS && keyboard < 10) {
+        const probeHeight = getVhProbeHeight();
+        const visible = vv ? vv.height : window.innerHeight;
+        overlay = Math.max(0, Math.round(probeHeight - visible));
       }
 
-      if (this.messagesEl) {
-        this.messagesEl.style.paddingBottom = `calc(120px + env(safe-area-inset-bottom, 0px) + ${Math.round(keyboard)}px)`;
-        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      if (this.options.debug) {
+        console.log("ChatWidget iOS overlay fallback", {
+          ua,
+          isIOS,
+          keyboard,
+          overlay,
+        });
+      }
+
+      const totalBottom = Math.round(keyboard + overlay);
+
+      const inputArea = this.window.querySelector(".chat-input-area");
+      if (inputArea) {
+        // Measure actual overlap of the input with the visible viewport and compensate
+        const viewportHeight = vv ? vv.height : window.innerHeight;
+        const rect = inputArea.getBoundingClientRect();
+        const desiredGap = 8; // keep a small gap above bottom UI
+        const overlap = Math.max(0, rect.bottom + desiredGap - viewportHeight);
+        const extra = Math.round(overlap);
+        const total = totalBottom + extra;
+
+        if (this.options.debug) {
+          console.log("ChatWidget bottom adjustment", {
+            viewportHeight,
+            rectBottom: rect.bottom,
+            desiredGap,
+            overlap,
+            extra,
+            total,
+          });
+        }
+
+        inputArea.style.bottom = `calc(1rem + env(safe-area-inset-bottom, 0px) + ${total}px)`;
+
+        if (this.messagesEl) {
+          this.messagesEl.style.paddingBottom = `calc(120px + env(safe-area-inset-bottom, 0px) + ${total}px)`;
+          this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+        }
       }
     };
 
@@ -1343,6 +1411,12 @@ class UniversalChatWidget {
 
     // Clear/refresh overrides when resizing across the mobile/desktop breakpoint
     window.addEventListener("resize", updateAll);
+
+    // Update when the page or chat messages scroll (affects iOS bottom overlay visibility)
+    window.addEventListener("scroll", updateAll, { passive: true });
+    if (this.messagesEl) {
+      this.messagesEl.addEventListener("scroll", updateAll, { passive: true });
+    }
   }
 
   formatMessage(content) {

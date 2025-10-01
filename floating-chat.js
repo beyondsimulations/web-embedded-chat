@@ -69,6 +69,62 @@ class UniversalChatWidget {
     return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   }
 
+  // Helper function to escape HTML to prevent XSS
+  escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return '';
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // Validate and sanitize source data structure
+  validateSources(sources) {
+    if (!Array.isArray(sources)) return [];
+
+    return sources.filter(sourceData => {
+      // Validate basic structure
+      if (!sourceData || typeof sourceData !== 'object') return false;
+
+      // Validate source object
+      if (sourceData.source && typeof sourceData.source === 'object') {
+        // Ensure source.name and source.description are strings
+        if (sourceData.source.name && typeof sourceData.source.name !== 'string') return false;
+        if (sourceData.source.description && typeof sourceData.source.description !== 'string') return false;
+      }
+
+      // Validate document is object or array
+      if (sourceData.document && typeof sourceData.document !== 'object') return false;
+
+      // Validate metadata is object
+      if (sourceData.metadata && typeof sourceData.metadata !== 'object') return false;
+
+      return true;
+    }).map(sourceData => {
+      // Sanitize by creating a clean copy with only expected fields
+      const sanitized = {};
+
+      if (sourceData.source && typeof sourceData.source === 'object') {
+        sanitized.source = {
+          name: String(sourceData.source.name || '').substring(0, 500),
+          description: sourceData.source.description ? String(sourceData.source.description).substring(0, 1000) : ''
+        };
+      }
+
+      if (sourceData.document) {
+        sanitized.document = sourceData.document;
+      }
+
+      if (sourceData.metadata) {
+        sanitized.metadata = sourceData.metadata;
+      }
+
+      return sanitized;
+    });
+  }
+
   addCopyButtonsToCodeBlocks(messageElement) {
     const codeBlocks = messageElement.querySelectorAll("pre");
     codeBlocks.forEach((codeBlock) => {
@@ -155,6 +211,9 @@ class UniversalChatWidget {
     const messageBubble = messageElement.querySelector(".message-bubble");
     if (!messageBubble) return;
 
+    // Validate and sanitize sources first
+    sources = this.validateSources(sources);
+
     let content = messageBubble.innerHTML;
     const citations = {};
 
@@ -178,11 +237,12 @@ class UniversalChatWidget {
             // Use citation number as key to find the corresponding document
             const docKey = citationNum.toString();
             const docContent = document[docKey] || document[citationNum - 1];
-            if (docContent) {
+            if (docContent && typeof docContent === 'string') {
               // Create reference text from source metadata and document content
-              let referenceText = `<strong>${source.name}</strong>`;
+              // SECURITY: All content is escaped to prevent XSS
+              let referenceText = `<strong>${this.escapeHtml(source.name)}</strong>`;
               if (source.description) {
-                referenceText += ` - ${source.description}`;
+                referenceText += ` - ${this.escapeHtml(source.description)}`;
               }
 
               // Add metadata info if available
@@ -194,6 +254,7 @@ class UniversalChatWidget {
 
                     // Parse Python-style list format with regex
                     if (
+                      typeof metaInfo.headings === 'string' &&
                       metaInfo.headings.startsWith("[") &&
                       metaInfo.headings.endsWith("]")
                     ) {
@@ -205,7 +266,9 @@ class UniversalChatWidget {
                     }
 
                     if (headings.length > 0) {
-                      referenceText += `<br><strong>Section:</strong> ${headings.join(" > ")}`;
+                      // SECURITY: Escape each heading
+                      const escapedHeadings = headings.map(h => this.escapeHtml(h)).join(" &gt; ");
+                      referenceText += `<br><strong>Section:</strong> ${escapedHeadings}`;
                     }
                   } catch (parseError) {
                     console.warn(
@@ -214,21 +277,22 @@ class UniversalChatWidget {
                       parseError,
                     );
                     // Fallback: just show the raw headings string if it's reasonable
-                    if (metaInfo.headings.length < 100) {
-                      referenceText += `<br><strong>Section:</strong> ${metaInfo.headings}`;
+                    if (typeof metaInfo.headings === 'string' && metaInfo.headings.length < 100) {
+                      referenceText += `<br><strong>Section:</strong> ${this.escapeHtml(metaInfo.headings)}`;
                     }
                   }
                 }
               }
 
               // Add document snippet
-              const snippet = docContent
+              // SECURITY: Escape the snippet content
+              const snippet = String(docContent)
                 .substring(0, 200)
                 .replace(/[#*-]/g, "")
                 .replace(/\s+/g, " ")
                 .trim();
               if (snippet) {
-                referenceText += `<br><em>${snippet}...</em>`;
+                referenceText += `<br><em>${this.escapeHtml(snippet)}...</em>`;
               }
 
               citations[citationNum] = referenceText;

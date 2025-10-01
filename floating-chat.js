@@ -237,6 +237,65 @@ class UniversalChatWidget {
     this.rafIds.scroll = requestAnimationFrame(callback);
   }
 
+  // Get all focusable elements within the chat window
+  getFocusableElements() {
+    if (!this.window) return [];
+
+    const focusableSelectors = [
+      'button:not([disabled])',
+      'a[href]',
+      'input:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(', ');
+
+    return Array.from(this.window.querySelectorAll(focusableSelectors));
+  }
+
+  // Focus trap for mobile fullscreen mode
+  trapFocus(e) {
+    // Only trap focus on mobile when window is open
+    if (!this.isOpen || window.innerWidth > 768) return;
+
+    const focusableElements = this.getFocusableElements();
+    if (focusableElements.length === 0) return;
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    // If Tab is pressed
+    if (e.key === 'Tab') {
+      // Shift + Tab (going backwards)
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      }
+      // Tab (going forwards)
+      else {
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    }
+  }
+
+  // Set up focus trap listener
+  setupFocusTrap() {
+    this.focusTrapHandler = (e) => this.trapFocus(e);
+    document.addEventListener('keydown', this.focusTrapHandler);
+  }
+
+  // Remove focus trap listener
+  removeFocusTrap() {
+    if (this.focusTrapHandler) {
+      document.removeEventListener('keydown', this.focusTrapHandler);
+      this.focusTrapHandler = null;
+    }
+  }
+
   addCopyButtonsToCodeBlocks(messageElement) {
     const codeBlocks = messageElement.querySelectorAll("pre");
     codeBlocks.forEach((codeBlock) => {
@@ -430,8 +489,8 @@ class UniversalChatWidget {
         if (cleanText.length > 15) {
           citations[citationNum] = referenceText;
 
-          // Replace this citation with a clickable link
-          const replacement = `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference">[${citationNum}]</span>`;
+          // Replace this citation with a clickable link (keyboard accessible)
+          const replacement = `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference" role="button" tabindex="0" aria-label="View reference ${citationNum}">[${citationNum}]</span>`;
           content = content.replace(match[0], replacement);
 
           // Reset regex position since we modified the string
@@ -444,7 +503,7 @@ class UniversalChatWidget {
     content = content.replace(/\[(\d+)\]/g, (match, num) => {
       const citationNum = parseInt(num);
       if (citations[citationNum]) {
-        return `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference">[${citationNum}]</span>`;
+        return `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference" role="button" tabindex="0" aria-label="View reference ${citationNum}">[${citationNum}]</span>`;
       }
       return match;
     });
@@ -467,10 +526,9 @@ class UniversalChatWidget {
 
       messageBubble.innerHTML = content;
 
-      // Add click handlers for citation links
+      // Add click and keyboard handlers for citation links
       messageElement.querySelectorAll(".citation-link").forEach((link) => {
-        link.addEventListener("click", (e) => {
-          const citationNum = e.target.dataset.citation;
+        const scrollToReference = (citationNum) => {
           const referenceElement = messageElement.querySelector(
             `#ref-${citationNum}`,
           );
@@ -483,6 +541,20 @@ class UniversalChatWidget {
             setTimeout(() => {
               referenceElement.classList.remove("highlighted");
             }, 2000);
+          }
+        };
+
+        link.addEventListener("click", (e) => {
+          const citationNum = e.target.dataset.citation;
+          scrollToReference(citationNum);
+        });
+
+        // Keyboard accessibility: Enter and Space keys
+        link.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault(); // Prevent page scroll on Space
+            const citationNum = e.target.dataset.citation;
+            scrollToReference(citationNum);
           }
         });
       });
@@ -1121,6 +1193,28 @@ class UniversalChatWidget {
         0%, 100% { transform: scale(1); }
         50% { transform: scale(1.1); }
       }
+
+      /* Screen reader only content */
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+      }
+
+      /* Focus visible styles for better keyboard navigation */
+      .citation-link:focus,
+      .chat-send-btn:focus,
+      .chat-header-btn:focus,
+      .chat-input:focus {
+        outline: 2px solid ${this.options.userColor};
+        outline-offset: 2px;
+      }
     `;
 
     document.head.appendChild(styles);
@@ -1132,11 +1226,14 @@ class UniversalChatWidget {
     this.button.className = "universal-chat-button";
     this.button.innerHTML = "💬";
     this.button.setAttribute("aria-label", "Open chat");
+    this.button.setAttribute("aria-expanded", "false");
+    this.button.setAttribute("aria-haspopup", "dialog");
 
     // Add unread badge
     this.unreadBadge = document.createElement("span");
     this.unreadBadge.className = "chat-unread-badge";
     this.unreadBadge.style.display = "none";
+    this.unreadBadge.setAttribute("aria-label", "unread messages");
     this.button.appendChild(this.unreadBadge);
 
     // Add typing indicator for button
@@ -1145,26 +1242,31 @@ class UniversalChatWidget {
     this.buttonTypingIndicator.innerHTML =
       "<span></span><span></span><span></span>";
     this.buttonTypingIndicator.style.display = "none";
+    this.buttonTypingIndicator.setAttribute("role", "status");
+    this.buttonTypingIndicator.setAttribute("aria-label", "Assistant is typing");
     this.button.appendChild(this.buttonTypingIndicator);
 
     // Create window
     this.window = document.createElement("div");
     this.window.className = "universal-chat-window";
+    this.window.setAttribute("role", "dialog");
+    this.window.setAttribute("aria-label", this.options.title);
+    this.window.setAttribute("aria-modal", "false"); // Changed to true on mobile
     this.window.innerHTML = `
       <div class="chat-header">
         <div class="chat-header-info">
-          <h3>${this.options.title}</h3>
+          <h3 id="chat-title">${this.options.title}</h3>
         </div>
         <div class="chat-header-actions">
-          <button class="chat-header-btn chat-clear-btn" title="Clear chat">↻</button>
-          <button class="chat-header-btn chat-close-btn" title="Minimize">×</button>
+          <button class="chat-header-btn chat-clear-btn" title="Clear chat" aria-label="Clear chat history">↻</button>
+          <button class="chat-header-btn chat-close-btn" title="Minimize" aria-label="Close chat">×</button>
         </div>
       </div>
-      ${this.options.showModelInfo ? '<div class="model-info" id="model-info"></div>' : ""}
-      <div class="chat-messages">
-        <div class="message assistant">
+      ${this.options.showModelInfo ? '<div class="model-info" id="model-info" role="status"></div>' : ""}
+      <div class="chat-messages" role="log" aria-live="polite" aria-atomic="false" aria-label="Chat conversation">
+        <div class="message assistant" role="article" aria-label="Message from assistant">
           <div class="message-bubble">${this.options.welcomeMessage}</div>
-          <div class="message-time">${this.formatTime(new Date())}</div>
+          <div class="message-time" aria-label="sent at ${this.formatTime(new Date())}">${this.formatTime(new Date())}</div>
         </div>
       </div>
       <div class="chat-input-area">
@@ -1173,11 +1275,14 @@ class UniversalChatWidget {
             class="chat-input"
             placeholder="${this.options.placeholder}"
             maxlength="2000"
-            rows="1"></textarea>
-          <button class="chat-send-btn" disabled>
+            rows="1"
+            aria-label="Type your message"
+            aria-describedby="char-limit"></textarea>
+          <button class="chat-send-btn" disabled aria-label="Send message">
             Send
           </button>
         </div>
+        <div id="char-limit" class="sr-only">Maximum 2000 characters</div>
       </div>
     `;
 
@@ -1261,11 +1366,29 @@ class UniversalChatWidget {
     this.window.classList.add("open");
     this.button.classList.add("chat-open");
     this.button.innerHTML = "×";
+    this.button.setAttribute("aria-label", "Close chat");
+    this.button.setAttribute("aria-expanded", "true");
+
+    // Set aria-modal to true on mobile
+    if (window.innerWidth <= 768) {
+      this.window.setAttribute("aria-modal", "true");
+    }
+
     this.unreadCount = 0;
     this.updateUnreadBadge();
     this.hideMessagePreview();
     this.buttonTypingIndicator.style.display = "none";
-    this.inputEl.focus();
+
+    // Focus management: move focus to input field
+    setTimeout(() => {
+      this.inputEl.focus();
+    }, 100);
+
+    // Set up focus trap for mobile
+    if (window.innerWidth <= 768) {
+      this.setupFocusTrap();
+    }
+
     this.saveState();
   }
 
@@ -1274,6 +1397,16 @@ class UniversalChatWidget {
     this.window.classList.remove("open");
     this.button.classList.remove("chat-open");
     this.button.innerHTML = "💬";
+    this.button.setAttribute("aria-label", "Open chat");
+    this.button.setAttribute("aria-expanded", "false");
+    this.window.setAttribute("aria-modal", "false");
+
+    // Remove focus trap
+    this.removeFocusTrap();
+
+    // Focus management: return focus to button
+    this.button.focus();
+
     this.saveState();
   }
 
@@ -1395,8 +1528,11 @@ class UniversalChatWidget {
     const typingEl = document.createElement("div");
     typingEl.className = "message assistant";
     typingEl.id = "typing-indicator";
+    typingEl.setAttribute("role", "status");
+    typingEl.setAttribute("aria-live", "polite");
+    typingEl.setAttribute("aria-label", "Assistant is typing");
     typingEl.innerHTML =
-      '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+      '<div class="typing-indicator" aria-hidden="true"><span></span><span></span><span></span></div>';
     this.messagesEl.appendChild(typingEl);
 
     // Smooth scroll with RAF for better performance
@@ -1440,11 +1576,16 @@ class UniversalChatWidget {
   addMessage(type, content, sources = []) {
     const messageEl = document.createElement("div");
     messageEl.className = `message ${type}`;
+    messageEl.setAttribute("role", "article");
+
     const formatted = this.formatMessage(content);
     const time = this.formatTime(new Date());
+    const sender = type === "user" ? "You" : "Assistant";
+
+    messageEl.setAttribute("aria-label", `Message from ${sender} at ${time}`);
     messageEl.innerHTML = `
       <div class="message-bubble">${formatted}</div>
-      <div class="message-time">${time}</div>
+      <div class="message-time" aria-label="sent at ${time}">${time}</div>
     `;
     this.messagesEl.appendChild(messageEl);
 
@@ -1572,6 +1713,9 @@ class UniversalChatWidget {
       clearTimeout(this.previewTimeout);
       this.previewTimeout = null;
     }
+
+    // Remove focus trap
+    this.removeFocusTrap();
 
     // Remove DOM elements
     if (this.button) this.button.remove();

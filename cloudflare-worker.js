@@ -90,7 +90,6 @@ export default {
     const isDevelopment =
       env.ENVIRONMENT === "development" || env.NODE_ENV === "development";
 
-
     if (!origin || origin === "null") {
       // Handle null origin (local files, some dev tools)
       // Allow in development, restrict in production
@@ -313,7 +312,7 @@ export default {
       secureLog("traceId truthy?:", !!traceId, env);
       secureLog("traceId is null?:", traceId === null, env);
       secureLog("traceId is undefined?:", traceId === undefined, env);
-      
+
       if (!traceId || typeof traceId !== "string" || traceId === "null") {
         traceId = generateUUID();
         secureLog("Generated new trace ID for conversation:", traceId, env);
@@ -454,7 +453,7 @@ export default {
         response: assistantMessage,
         traceId: traceId, // Return trace ID so client can persist it
       };
-      
+
       secureLog("Returning traceId to client:", traceId, env);
 
       // Include source data if present in the API response

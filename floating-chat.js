@@ -744,6 +744,7 @@ class UniversalChatWidget {
         .universal-chat-window {
           width: 100vw !important;
           height: 100vh !important;
+          height: 100dvh !important; /* Dynamic viewport height for better keyboard handling */
           max-height: 100vh !important;
           top: 0 !important;
           left: 0 !important;
@@ -763,10 +764,12 @@ class UniversalChatWidget {
 
         .chat-messages {
           padding-bottom: calc(120px + env(safe-area-inset-bottom, 0));
+          -webkit-overflow-scrolling: touch;
         }
 
         .chat-input-area {
-          bottom: calc(1rem + env(safe-area-inset-bottom, 0));
+          position: fixed !important;
+          bottom: env(safe-area-inset-bottom, 0);
           left: 1rem;
           right: 1rem;
           width: auto;
@@ -775,11 +778,16 @@ class UniversalChatWidget {
           border-radius: 2px;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           padding-bottom: 0;
+          z-index: 1000;
         }
 
         .chat-input-container {
           border-radius: 2px;
           border: 1px solid ${this.options.borderColor};
+        }
+
+        .chat-input {
+          font-size: 16px !important; /* Prevents iOS zoom on focus */
         }
       }
 
@@ -1035,6 +1043,23 @@ class UniversalChatWidget {
     this.inputEl.addEventListener("input", () => {
       this.sendBtn.disabled = !this.inputEl.value.trim();
       this.autoResizeInput();
+    });
+
+    // iOS keyboard handling
+    this.inputEl.addEventListener("focus", () => {
+      setTimeout(() => {
+        this.inputEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        // Adjust messages padding to prevent content from being hidden
+        if (window.innerWidth <= 768) {
+          this.messagesEl.style.paddingBottom = "180px";
+        }
+      }, 300);
+    });
+
+    this.inputEl.addEventListener("blur", () => {
+      if (window.innerWidth <= 768) {
+        this.messagesEl.style.paddingBottom = "";
+      }
     });
 
     document.addEventListener("keydown", (e) => {

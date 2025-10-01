@@ -67,6 +67,9 @@ class UniversalChatWidget {
     this.debounceTimers = {};
     this.rafIds = {};
 
+    // Error recovery
+    this.lastFailedMessage = null;
+
     this.init();
   }
 
@@ -294,6 +297,53 @@ class UniversalChatWidget {
       document.removeEventListener('keydown', this.focusTrapHandler);
       this.focusTrapHandler = null;
     }
+  }
+
+  // Detect error type from fetch error or response
+  detectErrorType(error, response) {
+    // Network errors (no internet, DNS failure, etc.)
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      return { type: 'network', message: '🔌 Connection lost. Check your internet and try again.' };
+    }
+
+    // Timeout errors
+    if (error.name === 'AbortError') {
+      return { type: 'timeout', message: '⏱️ Request timed out. The server took too long to respond.' };
+    }
+
+    // HTTP error responses
+    if (response) {
+      if (response.status === 429) {
+        return { type: 'ratelimit', message: '⏳ Too many requests. Please wait a moment and try again.' };
+      }
+      if (response.status >= 500) {
+        return { type: 'server', message: '⚠️ Server error. The service is temporarily unavailable.' };
+      }
+      if (response.status === 401 || response.status === 403) {
+        return { type: 'auth', message: '🔒 Authentication error. Please check your API configuration.' };
+      }
+      if (response.status >= 400) {
+        return { type: 'client', message: '❌ Invalid request. Please try again.' };
+      }
+    }
+
+    // Generic error
+    return { type: 'unknown', message: '⚠️ Something went wrong. Please try again.' };
+  }
+
+  // Retry the last failed message
+  async retryLastMessage() {
+    if (!this.lastFailedMessage) return;
+
+    const message = this.lastFailedMessage;
+    this.lastFailedMessage = null;
+
+    // Remove the error message
+    const errorMessages = this.messagesEl.querySelectorAll('.message.error');
+    errorMessages.forEach(msg => msg.remove());
+
+    // Resend the message
+    await this.sendMessage(message);
   }
 
   addCopyButtonsToCodeBlocks(messageElement) {
@@ -1215,6 +1265,46 @@ class UniversalChatWidget {
         outline: 2px solid ${this.options.userColor};
         outline-offset: 2px;
       }
+
+      /* Error message styles */
+      .message.error {
+        text-align: center;
+        margin: 1rem 0;
+      }
+
+      .message.error .message-bubble {
+        background: ${this.hexToRgba(this.options.stampColor, 0.1)};
+        border: 1px solid ${this.options.stampColor};
+        color: ${this.options.assistantFontColor};
+        padding: 1rem;
+        max-width: 100%;
+      }
+
+      .retry-btn {
+        margin-top: 0.75rem;
+        padding: 0.5rem 1rem;
+        background: ${this.options.userColor};
+        color: ${this.options.userFontColor};
+        border: 1px solid ${this.options.borderColor};
+        border-radius: 2px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .retry-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      .retry-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
     `;
 
     document.head.appendChild(styles);
@@ -1410,26 +1500,31 @@ class UniversalChatWidget {
     this.saveState();
   }
 
-  async sendMessage() {
-    const message = this.inputEl.value.trim();
+  async sendMessage(retryMessage = null) {
+    // Get message from input or use retry message
+    const message = retryMessage || this.inputEl.value.trim();
     if (!message) return;
 
-    this.addMessage("user", message);
-    this.inputEl.value = "";
-    this.autoResizeInput();
-    this.sendBtn.disabled = true;
+    // Only add user message and clear input if not a retry
+    if (!retryMessage) {
+      this.addMessage("user", message);
+      this.inputEl.value = "";
+      this.autoResizeInput();
+      this.sendBtn.disabled = true;
+    }
 
     this.showTyping();
-    
+
     if (this.options.debug) {
       console.log("Client sending traceId:", this.traceId);
     }
 
+    let response = null;
     try {
       // Optimize history for API request (token-aware sliding window)
       const optimizedHistory = this.optimizeHistory();
 
-      const response = await fetch(this.options.apiEndpoint, {
+      response = await fetch(this.options.apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1443,7 +1538,9 @@ class UniversalChatWidget {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to get response");
+        // Detect specific error type from response
+        const errorInfo = this.detectErrorType(new Error(data.error || "Request failed"), response);
+        throw { ...errorInfo, response };
       }
 
       // Store trace ID from server response for conversation continuity
@@ -1511,14 +1608,50 @@ class UniversalChatWidget {
         }, 1500);
       }
 
+      // Clear last failed message on success
+      this.lastFailedMessage = null;
+
       this.saveState();
     } catch (error) {
       console.error("Chat error:", error);
       this.hideTyping();
-      this.addMessage(
-        "assistant",
-        "⚠️ Sorry, I encountered an error. Please try again.",
-      );
+
+      // Detect error type
+      const errorInfo = error.type
+        ? error
+        : this.detectErrorType(error, response);
+
+      // Store message for retry
+      this.lastFailedMessage = message;
+
+      // Create error message with retry button
+      const errorEl = document.createElement("div");
+      errorEl.className = "message error";
+      errorEl.setAttribute("role", "alert");
+      errorEl.innerHTML = `
+        <div class="message-bubble">
+          ${errorInfo.message}
+          <br>
+          <button class="retry-btn" aria-label="Retry sending message">
+            ↻ Retry
+          </button>
+        </div>
+      `;
+
+      this.messagesEl.appendChild(errorEl);
+
+      // Add retry button handler
+      const retryBtn = errorEl.querySelector(".retry-btn");
+      retryBtn.addEventListener("click", async () => {
+        retryBtn.disabled = true;
+        retryBtn.textContent = "Retrying...";
+        await this.retryLastMessage();
+      });
+
+      // Smooth scroll to error message
+      this.scheduleScroll(() => {
+        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      });
     }
 
     this.inputEl.focus();

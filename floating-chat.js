@@ -1,6 +1,83 @@
 // Universal Chat Widget - Works with any OpenAI-compatible API
 
+/**
+ * @typedef {Object} ChatOptions
+ * @property {string} [title="Course Assistant"] - Chat window title
+ * @property {string} [welcomeMessage="Hello! How can I help you today?"] - Initial greeting message
+ * @property {string} [placeholder="Type your question..."] - Input placeholder text
+ * @property {string} [position="bottom-right"] - Widget position (bottom-right, bottom-left, top-right, top-left)
+ * @property {string} apiEndpoint - API endpoint URL for chat requests
+ * @property {string} [model="gpt-3.5-turbo"] - AI model name
+ * @property {string} [titleBackgroundColor="#2c3532"] - Header background color
+ * @property {string} [titleFontColor="#ffffff"] - Header text color
+ * @property {string} [assistantColor="#fdcd9a"] - Assistant message bubble color
+ * @property {string} [assistantFontColor="#2c3532"] - Assistant text color
+ * @property {number} [assistantMessageOpacity=1.0] - Assistant bubble opacity (0.0-1.0)
+ * @property {string} [userColor="#99bfbb"] - User message bubble color
+ * @property {string} [userFontColor="#2c3532"] - User text color
+ * @property {number} [userMessageOpacity=1.0] - User bubble opacity (0.0-1.0)
+ * @property {string} [chatBackground="#ffffff"] - Chat window background color
+ * @property {string} [stampColor="#df7d7d"] - Timestamp and badge color
+ * @property {string} [codeBackgroundColor="#f3f4f6"] - Code block background color
+ * @property {number} [codeOpacity=0.85] - Code block opacity (0.0-1.0)
+ * @property {string} [codeTextColor="#2c3532"] - Code text color
+ * @property {string} [borderColor="#2c3532"] - Border color
+ * @property {string} [buttonIconColor="#ffffff"] - Button icon color
+ * @property {string} [scrollbarColor="#d1d5db"] - Scrollbar color
+ * @property {string} [inputTextColor="#1f2937"] - Input text color
+ * @property {number} [inputAreaOpacity=0.95] - Input area opacity (0.0-1.0)
+ * @property {boolean} [startOpen=false] - Auto-open chat on load
+ * @property {number} [buttonSize=60] - Chat button size in pixels
+ * @property {number} [windowWidth=450] - Chat window width in pixels
+ * @property {number} [windowHeight=600] - Chat window height in pixels
+ * @property {boolean} [showModelInfo=false] - Display model name in UI
+ * @property {number} [maxHistoryTokens=4000] - Token budget for conversation history
+ * @property {number} [alwaysKeepRecentMessages=10] - Recent messages to keep uncompressed
+ * @property {number} [maxHistoryMessages=100] - Maximum stored messages
+ * @property {boolean} [debug=false] - Enable debug logging
+ */
+
+/**
+ * @typedef {Object} ChatMessage
+ * @property {"user"|"assistant"|"system"} role - Message sender role
+ * @property {string} content - Message content
+ */
+
+/**
+ * @typedef {Object} SourceMetadata
+ * @property {string|string[]} [headings] - Section headings
+ * @property {*} [key] - Additional metadata fields
+ */
+
+/**
+ * @typedef {Object} Source
+ * @property {string} name - Source document name
+ * @property {string} [description] - Source description
+ */
+
+/**
+ * @typedef {Object} SourceData
+ * @property {Source} source - Source information
+ * @property {Object<string, string>|string[]} [document] - Document content by citation number
+ * @property {Object<string, SourceMetadata>} [metadata] - Metadata by citation number
+ */
+
+/**
+ * @typedef {Object} ErrorInfo
+ * @property {"network"|"timeout"|"ratelimit"|"server"|"auth"|"client"|"unknown"} type - Error type
+ * @property {string} message - User-friendly error message
+ * @property {Response} [response] - HTTP response object if available
+ */
+
+/**
+ * Universal Chat Widget - A floating chat interface for any OpenAI-compatible API
+ * Provides a customizable chat UI with citation support, LaTeX rendering, and accessibility features
+ */
 class UniversalChatWidget {
+  /**
+   * Creates a new chat widget instance
+   * @param {ChatOptions} [options={}] - Configuration options for the chat widget
+   */
   constructor(options = {}) {
     this.options = {
       title: options.title || "Course Assistant",
@@ -73,7 +150,18 @@ class UniversalChatWidget {
     this.init();
   }
 
-  // Constants for magic numbers - improves maintainability
+  /**
+   * Timing constants for animations and delays (in milliseconds)
+   * @type {Object}
+   * @property {number} FOCUS_DELAY - Delay before focusing input
+   * @property {number} DEBOUNCE_INPUT - Input debounce for auto-resize
+   * @property {number} IOS_KEYBOARD_DELAY - Delay for iOS keyboard animations
+   * @property {number} START_OPEN_DELAY - Delay before auto-opening chat
+   * @property {number} HIGHLIGHT_DURATION - Duration for citation highlight
+   * @property {number} COPY_SUCCESS_DURATION - Duration for "copied" indicator
+   * @property {number} PREVIEW_TIMEOUT - Message preview display time
+   * @property {number} PULSE_ANIMATION - Pulse animation duration
+   */
   static TIMINGS = {
     FOCUS_DELAY: 100,              // Delay before focusing input
     DEBOUNCE_INPUT: 100,           // Input debounce for auto-resize
@@ -85,6 +173,17 @@ class UniversalChatWidget {
     PULSE_ANIMATION: 1500,         // Pulse animation duration
   };
 
+  /**
+   * Size constants for UI elements (in pixels)
+   * @type {Object}
+   * @property {number} BUTTON_SIZE - Default chat button size
+   * @property {number} WINDOW_WIDTH - Default window width
+   * @property {number} WINDOW_HEIGHT - Default window height
+   * @property {number} MOBILE_BREAKPOINT - Mobile/desktop breakpoint
+   * @property {number} MOBILE_PADDING_BOTTOM - Mobile keyboard padding
+   * @property {number} SCROLLBAR_WIDTH - Scrollbar width
+   * @property {number} INPUT_MAX_HEIGHT - Max input field height
+   */
   static SIZES = {
     BUTTON_SIZE: 60,               // Default chat button size (px)
     WINDOW_WIDTH: 450,             // Default window width (px)
@@ -95,6 +194,23 @@ class UniversalChatWidget {
     INPUT_MAX_HEIGHT: 100,         // Max input field height (px)
   };
 
+  /**
+   * Limit constants for messages, history, and content lengths
+   * @type {Object}
+   * @property {number} MAX_MESSAGE_LENGTH - Max characters per message
+   * @property {number} MAX_HISTORY_MESSAGES - Hard limit on stored messages
+   * @property {number} MAX_HISTORY_TOKENS - Token budget for API context
+   * @property {number} ALWAYS_KEEP_RECENT - Recent messages never compressed
+   * @property {number} SOURCE_NAME_LENGTH - Max source name length
+   * @property {number} SOURCE_DESC_LENGTH - Max source description length
+   * @property {number} SNIPPET_LENGTH - Citation snippet length
+   * @property {number} COMPRESSED_MSG_LENGTH - Compressed message length
+   * @property {number} USER_MSG_LENGTH - Compressed user message length
+   * @property {number} MAX_HEADINGS_LENGTH - Max heading string length
+   * @property {number} MIN_CITATION_LENGTH - Min citation text length
+   * @property {number} MODEL_NAME_LENGTH - Max model name length
+   * @property {number} CHARS_PER_TOKEN - Approximate chars per token
+   */
   static LIMITS = {
     MAX_MESSAGE_LENGTH: 2000,      // Max characters per message
     MAX_HISTORY_MESSAGES: 100,     // Hard limit on stored messages
@@ -111,7 +227,12 @@ class UniversalChatWidget {
     CHARS_PER_TOKEN: 4,            // Approximate chars per token
   };
 
-  // Helper function to convert hex color to rgba with opacity
+  /**
+   * Converts hex color to rgba format with specified opacity
+   * @param {string} hex - Hex color code (e.g., "#ff0000")
+   * @param {number} opacity - Opacity value from 0.0 to 1.0
+   * @returns {string} RGBA color string (e.g., "rgba(255, 0, 0, 0.5)")
+   */
   hexToRgba(hex, opacity) {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -119,7 +240,11 @@ class UniversalChatWidget {
     return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   }
 
-  // Helper function to escape HTML to prevent XSS
+  /**
+   * Escapes HTML special characters to prevent XSS attacks
+   * @param {*} unsafe - Input string to escape (automatically handles non-string types)
+   * @returns {string} HTML-safe string with escaped special characters
+   */
   escapeHtml(unsafe) {
     if (typeof unsafe !== "string") return "";
     return unsafe
@@ -130,7 +255,11 @@ class UniversalChatWidget {
       .replace(/'/g, "&#039;");
   }
 
-  // Validate and sanitize source data structure
+  /**
+   * Validates and sanitizes citation source data to prevent XSS and ensure data integrity
+   * @param {SourceData[]} sources - Array of source data objects from API response
+   * @returns {SourceData[]} Validated and sanitized array of source data
+   */
   validateSources(sources) {
     if (!Array.isArray(sources)) return [];
 
@@ -189,14 +318,22 @@ class UniversalChatWidget {
       });
   }
 
-  // Estimate token count (rough approximation: 1 token ≈ 4 characters)
+  /**
+   * Estimates token count for text using rough approximation (1 token ≈ 4 characters)
+   * @param {string} text - Text to estimate tokens for
+   * @returns {number} Estimated token count
+   */
   estimateTokens(text) {
     if (!text || typeof text !== "string") return 0;
     // Account for whitespace and punctuation
     return Math.ceil(text.length / UniversalChatWidget.LIMITS.CHARS_PER_TOKEN);
   }
 
-  // Compress a message for history (strip formatting, keep essential info)
+  /**
+   * Compresses a message for history by stripping formatting and keeping essential info
+   * @param {ChatMessage} message - Message to compress
+   * @returns {ChatMessage} Compressed message with reduced content length
+   */
   compressMessage(message) {
     if (message.role === "user") {
       // Keep user messages mostly intact, just limit length
@@ -225,7 +362,11 @@ class UniversalChatWidget {
     }
   }
 
-  // Optimize history for API request with token budget
+  /**
+   * Optimizes conversation history for API requests using token-aware sliding window
+   * Keeps recent messages in full, compresses older ones within token budget
+   * @returns {ChatMessage[]} Optimized history array within token budget
+   */
   optimizeHistory() {
     if (this.history.length === 0) return [];
 
@@ -275,7 +416,11 @@ class UniversalChatWidget {
     return optimized;
   }
 
-  // Enforce hard limit on stored history
+  /**
+   * Enforces hard limit on stored conversation history
+   * Removes oldest messages when limit is exceeded
+   * @returns {void}
+   */
   trimHistory() {
     if (this.history.length > this.options.maxHistoryMessages) {
       const removed = this.history.length - this.options.maxHistoryMessages;
@@ -287,7 +432,13 @@ class UniversalChatWidget {
     }
   }
 
-  // Debounce utility for performance
+  /**
+   * Debounces a function call to improve performance during rapid events
+   * @param {string} key - Unique identifier for this debounced function
+   * @param {Function} callback - Function to execute after delay
+   * @param {number} [delay=150] - Delay in milliseconds
+   * @returns {void}
+   */
   debounce(key, callback, delay = 150) {
     if (this.debounceTimers[key]) {
       clearTimeout(this.debounceTimers[key]);
@@ -295,7 +446,11 @@ class UniversalChatWidget {
     this.debounceTimers[key] = setTimeout(callback, delay);
   }
 
-  // Request animation frame wrapper for smooth scrolling
+  /**
+   * Schedules a scroll operation using requestAnimationFrame for smooth performance
+   * @param {Function} callback - Scroll function to execute on next animation frame
+   * @returns {void}
+   */
   scheduleScroll(callback) {
     if (this.rafIds.scroll) {
       cancelAnimationFrame(this.rafIds.scroll);
@@ -303,7 +458,10 @@ class UniversalChatWidget {
     this.rafIds.scroll = requestAnimationFrame(callback);
   }
 
-  // Get all focusable elements within the chat window
+  /**
+   * Gets all focusable elements within the chat window for keyboard navigation
+   * @returns {HTMLElement[]} Array of focusable DOM elements
+   */
   getFocusableElements() {
     if (!this.window) return [];
 
@@ -318,7 +476,12 @@ class UniversalChatWidget {
     return Array.from(this.window.querySelectorAll(focusableSelectors));
   }
 
-  // Focus trap for mobile fullscreen mode
+  /**
+   * Traps keyboard focus within chat window (mobile fullscreen only)
+   * Ensures Tab navigation cycles through focusable elements
+   * @param {KeyboardEvent} e - Keyboard event
+   * @returns {void}
+   */
   trapFocus(e) {
     // Only trap focus on mobile when window is open
     if (!this.isOpen || window.innerWidth > UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) return;
@@ -348,13 +511,19 @@ class UniversalChatWidget {
     }
   }
 
-  // Set up focus trap listener
+  /**
+   * Sets up focus trap event listener for mobile accessibility
+   * @returns {void}
+   */
   setupFocusTrap() {
     this.focusTrapHandler = (e) => this.trapFocus(e);
     document.addEventListener("keydown", this.focusTrapHandler);
   }
 
-  // Remove focus trap listener
+  /**
+   * Removes focus trap event listener and cleans up
+   * @returns {void}
+   */
   removeFocusTrap() {
     if (this.focusTrapHandler) {
       document.removeEventListener("keydown", this.focusTrapHandler);
@@ -362,7 +531,12 @@ class UniversalChatWidget {
     }
   }
 
-  // Detect error type from fetch error or response
+  /**
+   * Detects and categorizes error type from fetch error or HTTP response
+   * @param {Error} error - JavaScript error object
+   * @param {Response} [response] - HTTP response object (if available)
+   * @returns {ErrorInfo} Error information with type and user-friendly message
+   */
   detectErrorType(error, response) {
     // Network errors (no internet, DNS failure, etc.)
     if (error.name === "TypeError" && error.message.includes("fetch")) {
@@ -415,7 +589,10 @@ class UniversalChatWidget {
     };
   }
 
-  // Retry the last failed message
+  /**
+   * Retries sending the last failed message
+   * @returns {Promise<void>}
+   */
   async retryLastMessage() {
     if (!this.lastFailedMessage) return;
 
@@ -430,6 +607,11 @@ class UniversalChatWidget {
     await this.sendMessage(message);
   }
 
+  /**
+   * Adds copy buttons to all code blocks within a message element
+   * @param {HTMLElement} messageElement - Message DOM element containing code blocks
+   * @returns {void}
+   */
   addCopyButtonsToCodeBlocks(messageElement) {
     const codeBlocks = messageElement.querySelectorAll("pre");
     codeBlocks.forEach((codeBlock) => {
@@ -474,6 +656,10 @@ class UniversalChatWidget {
     });
   }
 
+  /**
+   * Dynamically loads KaTeX library for LaTeX math rendering
+   * @returns {Promise<void>} Promise that resolves when KaTeX is loaded
+   */
   loadKaTeX() {
     return new Promise((resolve) => {
       if (window.katex) {
@@ -495,6 +681,11 @@ class UniversalChatWidget {
     });
   }
 
+  /**
+   * Renders LaTeX mathematical expressions in a message element
+   * @param {HTMLElement} messageElement - Message DOM element containing LaTeX
+   * @returns {Promise<void>}
+   */
   async renderLatex(messageElement) {
     await this.loadKaTeX();
 

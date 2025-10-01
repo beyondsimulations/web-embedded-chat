@@ -41,15 +41,15 @@ class UniversalChatWidget {
 
       // Behavior options
       startOpen: options.startOpen || false,
-      buttonSize: options.buttonSize || 60,
-      windowWidth: options.windowWidth || 450,
-      windowHeight: options.windowHeight || 600,
+      buttonSize: options.buttonSize || UniversalChatWidget.SIZES.BUTTON_SIZE,
+      windowWidth: options.windowWidth || UniversalChatWidget.SIZES.WINDOW_WIDTH,
+      windowHeight: options.windowHeight || UniversalChatWidget.SIZES.WINDOW_HEIGHT,
       showModelInfo: options.showModelInfo || false,
 
       // History management options
-      maxHistoryTokens: options.maxHistoryTokens || 4000, // Token budget for context
-      alwaysKeepRecentMessages: options.alwaysKeepRecentMessages || 10, // Never compress recent messages
-      maxHistoryMessages: options.maxHistoryMessages || 100, // Hard limit on stored messages
+      maxHistoryTokens: options.maxHistoryTokens || UniversalChatWidget.LIMITS.MAX_HISTORY_TOKENS,
+      alwaysKeepRecentMessages: options.alwaysKeepRecentMessages || UniversalChatWidget.LIMITS.ALWAYS_KEEP_RECENT,
+      maxHistoryMessages: options.maxHistoryMessages || UniversalChatWidget.LIMITS.MAX_HISTORY_MESSAGES,
 
       // Debug mode (enable for development)
       debug: options.debug || false,
@@ -73,6 +73,44 @@ class UniversalChatWidget {
     this.init();
   }
 
+  // Constants for magic numbers - improves maintainability
+  static TIMINGS = {
+    FOCUS_DELAY: 100,              // Delay before focusing input
+    DEBOUNCE_INPUT: 100,           // Input debounce for auto-resize
+    IOS_KEYBOARD_DELAY: 300,       // Delay for iOS keyboard animations
+    START_OPEN_DELAY: 1000,        // Delay before auto-opening chat
+    HIGHLIGHT_DURATION: 2000,      // Duration for citation highlight
+    COPY_SUCCESS_DURATION: 2000,   // Duration for "copied" indicator
+    PREVIEW_TIMEOUT: 5000,         // Message preview display time
+    PULSE_ANIMATION: 1500,         // Pulse animation duration
+  };
+
+  static SIZES = {
+    BUTTON_SIZE: 60,               // Default chat button size (px)
+    WINDOW_WIDTH: 450,             // Default window width (px)
+    WINDOW_HEIGHT: 600,            // Default window height (px)
+    MOBILE_BREAKPOINT: 768,        // Mobile/desktop breakpoint (px)
+    MOBILE_PADDING_BOTTOM: 180,    // Mobile keyboard padding (px)
+    SCROLLBAR_WIDTH: 6,            // Scrollbar width (px)
+    INPUT_MAX_HEIGHT: 100,         // Max input field height (px)
+  };
+
+  static LIMITS = {
+    MAX_MESSAGE_LENGTH: 2000,      // Max characters per message
+    MAX_HISTORY_MESSAGES: 100,     // Hard limit on stored messages
+    MAX_HISTORY_TOKENS: 4000,      // Token budget for API context
+    ALWAYS_KEEP_RECENT: 10,        // Recent messages never compressed
+    SOURCE_NAME_LENGTH: 500,       // Max source name length
+    SOURCE_DESC_LENGTH: 1000,      // Max source description length
+    SNIPPET_LENGTH: 200,           // Citation snippet length
+    COMPRESSED_MSG_LENGTH: 200,    // Compressed message length
+    USER_MSG_LENGTH: 500,          // Compressed user message length
+    MAX_HEADINGS_LENGTH: 100,      // Max heading string length
+    MIN_CITATION_LENGTH: 15,       // Min citation text length
+    MODEL_NAME_LENGTH: 50,         // Max model name length
+    CHARS_PER_TOKEN: 4,            // Approximate chars per token
+  };
+
   // Helper function to convert hex color to rgba with opacity
   hexToRgba(hex, opacity) {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -83,7 +121,7 @@ class UniversalChatWidget {
 
   // Helper function to escape HTML to prevent XSS
   escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return '';
+    if (typeof unsafe !== "string") return "";
     return unsafe
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -96,77 +134,93 @@ class UniversalChatWidget {
   validateSources(sources) {
     if (!Array.isArray(sources)) return [];
 
-    return sources.filter(sourceData => {
-      // Validate basic structure
-      if (!sourceData || typeof sourceData !== 'object') return false;
+    return sources
+      .filter((sourceData) => {
+        // Validate basic structure
+        if (!sourceData || typeof sourceData !== "object") return false;
 
-      // Validate source object
-      if (sourceData.source && typeof sourceData.source === 'object') {
-        // Ensure source.name and source.description are strings
-        if (sourceData.source.name && typeof sourceData.source.name !== 'string') return false;
-        if (sourceData.source.description && typeof sourceData.source.description !== 'string') return false;
-      }
+        // Validate source object
+        if (sourceData.source && typeof sourceData.source === "object") {
+          // Ensure source.name and source.description are strings
+          if (
+            sourceData.source.name &&
+            typeof sourceData.source.name !== "string"
+          )
+            return false;
+          if (
+            sourceData.source.description &&
+            typeof sourceData.source.description !== "string"
+          )
+            return false;
+        }
 
-      // Validate document is object or array
-      if (sourceData.document && typeof sourceData.document !== 'object') return false;
+        // Validate document is object or array
+        if (sourceData.document && typeof sourceData.document !== "object")
+          return false;
 
-      // Validate metadata is object
-      if (sourceData.metadata && typeof sourceData.metadata !== 'object') return false;
+        // Validate metadata is object
+        if (sourceData.metadata && typeof sourceData.metadata !== "object")
+          return false;
 
-      return true;
-    }).map(sourceData => {
-      // Sanitize by creating a clean copy with only expected fields
-      const sanitized = {};
+        return true;
+      })
+      .map((sourceData) => {
+        // Sanitize by creating a clean copy with only expected fields
+        const sanitized = {};
 
-      if (sourceData.source && typeof sourceData.source === 'object') {
-        sanitized.source = {
-          name: String(sourceData.source.name || '').substring(0, 500),
-          description: sourceData.source.description ? String(sourceData.source.description).substring(0, 1000) : ''
-        };
-      }
+        if (sourceData.source && typeof sourceData.source === "object") {
+          sanitized.source = {
+            name: String(sourceData.source.name || "").substring(0, UniversalChatWidget.LIMITS.SOURCE_NAME_LENGTH),
+            description: sourceData.source.description
+              ? String(sourceData.source.description).substring(0, UniversalChatWidget.LIMITS.SOURCE_DESC_LENGTH)
+              : "",
+          };
+        }
 
-      if (sourceData.document) {
-        sanitized.document = sourceData.document;
-      }
+        if (sourceData.document) {
+          sanitized.document = sourceData.document;
+        }
 
-      if (sourceData.metadata) {
-        sanitized.metadata = sourceData.metadata;
-      }
+        if (sourceData.metadata) {
+          sanitized.metadata = sourceData.metadata;
+        }
 
-      return sanitized;
-    });
+        return sanitized;
+      });
   }
 
   // Estimate token count (rough approximation: 1 token ≈ 4 characters)
   estimateTokens(text) {
-    if (!text || typeof text !== 'string') return 0;
+    if (!text || typeof text !== "string") return 0;
     // Account for whitespace and punctuation
-    return Math.ceil(text.length / 4);
+    return Math.ceil(text.length / UniversalChatWidget.LIMITS.CHARS_PER_TOKEN);
   }
 
   // Compress a message for history (strip formatting, keep essential info)
   compressMessage(message) {
-    if (message.role === 'user') {
+    if (message.role === "user") {
       // Keep user messages mostly intact, just limit length
       return {
-        role: 'user',
-        content: message.content.substring(0, 500)
+        role: "user",
+        content: message.content.substring(0, UniversalChatWidget.LIMITS.USER_MSG_LENGTH),
       };
     } else {
       // For assistant messages, extract first meaningful sentence
       const content = message.content
-        .replace(/```[\s\S]*?```/g, '[code]') // Replace code blocks
-        .replace(/\[(\d+)\]/g, '') // Remove citations
-        .replace(/[#*_]/g, '') // Remove markdown formatting
+        .replace(/```[\s\S]*?```/g, "[code]") // Replace code blocks
+        .replace(/\[(\d+)\]/g, "") // Remove citations
+        .replace(/[#*_]/g, "") // Remove markdown formatting
         .trim();
 
       // Get first sentence or first 200 chars
       const firstSentence = content.match(/^[^.!?]+[.!?]/);
-      const compressed = firstSentence ? firstSentence[0] : content.substring(0, 200);
+      const compressed = firstSentence
+        ? firstSentence[0]
+        : content.substring(0, UniversalChatWidget.LIMITS.COMPRESSED_MSG_LENGTH);
 
       return {
-        role: 'assistant',
-        content: compressed + (compressed.length < content.length ? '...' : '')
+        role: "assistant",
+        content: compressed + (compressed.length < content.length ? "..." : ""),
       };
     }
   }
@@ -176,17 +230,24 @@ class UniversalChatWidget {
     if (this.history.length === 0) return [];
 
     // Always keep recent messages in full
-    const recentCount = Math.min(this.options.alwaysKeepRecentMessages, this.history.length);
+    const recentCount = Math.min(
+      this.options.alwaysKeepRecentMessages,
+      this.history.length,
+    );
     const recentMessages = this.history.slice(-recentCount);
     const olderMessages = this.history.slice(0, -recentCount);
 
     // Calculate tokens for recent messages
-    let tokenCount = recentMessages.reduce((sum, msg) =>
-      sum + this.estimateTokens(msg.content), 0
+    let tokenCount = recentMessages.reduce(
+      (sum, msg) => sum + this.estimateTokens(msg.content),
+      0,
     );
 
     // If we're already under budget, return all messages
-    if (tokenCount < this.options.maxHistoryTokens && olderMessages.length === 0) {
+    if (
+      tokenCount < this.options.maxHistoryTokens &&
+      olderMessages.length === 0
+    ) {
       return this.history;
     }
 
@@ -206,7 +267,9 @@ class UniversalChatWidget {
     }
 
     if (this.options.debug) {
-      console.log(`History optimized: ${this.history.length} → ${optimized.length} messages (~${tokenCount} tokens)`);
+      console.log(
+        `History optimized: ${this.history.length} → ${optimized.length} messages (~${tokenCount} tokens)`,
+      );
     }
 
     return optimized;
@@ -245,12 +308,12 @@ class UniversalChatWidget {
     if (!this.window) return [];
 
     const focusableSelectors = [
-      'button:not([disabled])',
-      'a[href]',
-      'input:not([disabled])',
-      'textarea:not([disabled])',
-      '[tabindex]:not([tabindex="-1"])'
-    ].join(', ');
+      "button:not([disabled])",
+      "a[href]",
+      "input:not([disabled])",
+      "textarea:not([disabled])",
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(", ");
 
     return Array.from(this.window.querySelectorAll(focusableSelectors));
   }
@@ -258,7 +321,7 @@ class UniversalChatWidget {
   // Focus trap for mobile fullscreen mode
   trapFocus(e) {
     // Only trap focus on mobile when window is open
-    if (!this.isOpen || window.innerWidth > 768) return;
+    if (!this.isOpen || window.innerWidth > UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) return;
 
     const focusableElements = this.getFocusableElements();
     if (focusableElements.length === 0) return;
@@ -267,7 +330,7 @@ class UniversalChatWidget {
     const lastElement = focusableElements[focusableElements.length - 1];
 
     // If Tab is pressed
-    if (e.key === 'Tab') {
+    if (e.key === "Tab") {
       // Shift + Tab (going backwards)
       if (e.shiftKey) {
         if (document.activeElement === firstElement) {
@@ -288,13 +351,13 @@ class UniversalChatWidget {
   // Set up focus trap listener
   setupFocusTrap() {
     this.focusTrapHandler = (e) => this.trapFocus(e);
-    document.addEventListener('keydown', this.focusTrapHandler);
+    document.addEventListener("keydown", this.focusTrapHandler);
   }
 
   // Remove focus trap listener
   removeFocusTrap() {
     if (this.focusTrapHandler) {
-      document.removeEventListener('keydown', this.focusTrapHandler);
+      document.removeEventListener("keydown", this.focusTrapHandler);
       this.focusTrapHandler = null;
     }
   }
@@ -302,33 +365,54 @@ class UniversalChatWidget {
   // Detect error type from fetch error or response
   detectErrorType(error, response) {
     // Network errors (no internet, DNS failure, etc.)
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      return { type: 'network', message: '🔌 Connection lost. Check your internet and try again.' };
+    if (error.name === "TypeError" && error.message.includes("fetch")) {
+      return {
+        type: "network",
+        message: "🔌 Connection lost. Check your internet and try again.",
+      };
     }
 
     // Timeout errors
-    if (error.name === 'AbortError') {
-      return { type: 'timeout', message: '⏱️ Request timed out. The server took too long to respond.' };
+    if (error.name === "AbortError") {
+      return {
+        type: "timeout",
+        message: "Request timed out. The server took too long to respond.",
+      };
     }
 
     // HTTP error responses
     if (response) {
       if (response.status === 429) {
-        return { type: 'ratelimit', message: '⏳ Too many requests. Please wait a moment and try again.' };
+        return {
+          type: "ratelimit",
+          message: "Too many requests. Please wait a moment and try again.",
+        };
       }
       if (response.status >= 500) {
-        return { type: 'server', message: '⚠️ Server error. The service is temporarily unavailable.' };
+        return {
+          type: "server",
+          message: "Server error. The service is temporarily unavailable.",
+        };
       }
       if (response.status === 401 || response.status === 403) {
-        return { type: 'auth', message: '🔒 Authentication error. Please check your API configuration.' };
+        return {
+          type: "auth",
+          message: "Authentication error. Please check your API configuration.",
+        };
       }
       if (response.status >= 400) {
-        return { type: 'client', message: '❌ Invalid request. Please try again.' };
+        return {
+          type: "client",
+          message: "❌ Invalid request. Please try again.",
+        };
       }
     }
 
     // Generic error
-    return { type: 'unknown', message: '⚠️ Something went wrong. Please try again.' };
+    return {
+      type: "unknown",
+      message: "Something went wrong. Please try again.",
+    };
   }
 
   // Retry the last failed message
@@ -339,8 +423,8 @@ class UniversalChatWidget {
     this.lastFailedMessage = null;
 
     // Remove the error message
-    const errorMessages = this.messagesEl.querySelectorAll('.message.error');
-    errorMessages.forEach(msg => msg.remove());
+    const errorMessages = this.messagesEl.querySelectorAll(".message.error");
+    errorMessages.forEach((msg) => msg.remove());
 
     // Resend the message
     await this.sendMessage(message);
@@ -366,7 +450,7 @@ class UniversalChatWidget {
           setTimeout(() => {
             copyBtn.textContent = "⧉";
             copyBtn.classList.remove("copied");
-          }, 2000);
+          }, UniversalChatWidget.TIMINGS.COPY_SUCCESS_DURATION);
         } catch (err) {
           // Fallback for older browsers
           const textArea = document.createElement("textarea");
@@ -382,7 +466,7 @@ class UniversalChatWidget {
           setTimeout(() => {
             copyBtn.textContent = "⧉";
             copyBtn.classList.remove("copied");
-          }, 2000);
+          }, UniversalChatWidget.TIMINGS.COPY_SUCCESS_DURATION);
         }
       });
 
@@ -458,7 +542,7 @@ class UniversalChatWidget {
             // Use citation number as key to find the corresponding document
             const docKey = citationNum.toString();
             const docContent = document[docKey] || document[citationNum - 1];
-            if (docContent && typeof docContent === 'string') {
+            if (docContent && typeof docContent === "string") {
               // Create reference text from source metadata and document content
               // SECURITY: All content is escaped to prevent XSS
               let referenceText = `<strong>${this.escapeHtml(source.name)}</strong>`;
@@ -475,7 +559,7 @@ class UniversalChatWidget {
 
                     // Parse Python-style list format with regex
                     if (
-                      typeof metaInfo.headings === 'string' &&
+                      typeof metaInfo.headings === "string" &&
                       metaInfo.headings.startsWith("[") &&
                       metaInfo.headings.endsWith("]")
                     ) {
@@ -488,7 +572,9 @@ class UniversalChatWidget {
 
                     if (headings.length > 0) {
                       // SECURITY: Escape each heading
-                      const escapedHeadings = headings.map(h => this.escapeHtml(h)).join(" &gt; ");
+                      const escapedHeadings = headings
+                        .map((h) => this.escapeHtml(h))
+                        .join(" &gt; ");
                       referenceText += `<br><strong>Section:</strong> ${escapedHeadings}`;
                     }
                   } catch (parseError) {
@@ -498,7 +584,10 @@ class UniversalChatWidget {
                       parseError,
                     );
                     // Fallback: just show the raw headings string if it's reasonable
-                    if (typeof metaInfo.headings === 'string' && metaInfo.headings.length < 100) {
+                    if (
+                      typeof metaInfo.headings === "string" &&
+                      metaInfo.headings.length < UniversalChatWidget.LIMITS.MAX_HEADINGS_LENGTH
+                    ) {
                       referenceText += `<br><strong>Section:</strong> ${this.escapeHtml(metaInfo.headings)}`;
                     }
                   }
@@ -508,7 +597,7 @@ class UniversalChatWidget {
               // Add document snippet
               // SECURITY: Escape the snippet content
               const snippet = String(docContent)
-                .substring(0, 200)
+                .substring(0, UniversalChatWidget.LIMITS.SNIPPET_LENGTH)
                 .replace(/[#*-]/g, "")
                 .replace(/\s+/g, " ")
                 .trim();
@@ -536,7 +625,7 @@ class UniversalChatWidget {
           .replace(/\s+/g, " ")
           .trim();
 
-        if (cleanText.length > 15) {
+        if (cleanText.length > UniversalChatWidget.LIMITS.MIN_CITATION_LENGTH) {
           citations[citationNum] = referenceText;
 
           // Replace this citation with a clickable link (keyboard accessible)
@@ -590,7 +679,7 @@ class UniversalChatWidget {
             referenceElement.classList.add("highlighted");
             setTimeout(() => {
               referenceElement.classList.remove("highlighted");
-            }, 2000);
+            }, UniversalChatWidget.TIMINGS.HIGHLIGHT_DURATION);
           }
         };
 
@@ -633,7 +722,7 @@ class UniversalChatWidget {
       console.warn("Chat Widget: Invalid model name provided");
       return null;
     }
-    return model.substring(0, 50); // Limit length
+    return model.substring(0, UniversalChatWidget.LIMITS.MODEL_NAME_LENGTH);
   }
 
   ensureViewportMeta() {
@@ -661,7 +750,7 @@ class UniversalChatWidget {
     this.restoreState();
 
     if (this.options.startOpen && !this.hasInteracted) {
-      setTimeout(() => this.open(), 1000);
+      setTimeout(() => this.open(), UniversalChatWidget.TIMINGS.START_OPEN_DELAY);
     }
   }
 
@@ -787,10 +876,10 @@ class UniversalChatWidget {
       .universal-chat-window {
         position: fixed;
         ${this.options.position.includes("right") ? "right: 20px" : "left: 20px"};
-        ${this.options.position.includes("bottom") ? "bottom: 100px" : "top: 100px"};
+        ${this.options.position.includes("bottom") ? `bottom: ${this.options.buttonSize + 40}px` : `top: ${this.options.buttonSize + 40}px`};
         width: ${this.options.windowWidth}px;
         height: ${this.options.windowHeight}px;
-        max-height: calc(100vh - 120px);
+        max-height: calc(100vh - ${this.options.buttonSize + 60}px);
         background: ${this.options.chatBackground};
         border-radius: 2px;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
@@ -857,13 +946,13 @@ class UniversalChatWidget {
         flex: 1;
         overflow-y: auto;
         padding: 1rem;
-        padding-bottom: 100px;
+        padding-bottom: ${UniversalChatWidget.SIZES.INPUT_MAX_HEIGHT}px;
         background: ${this.options.chatBackground};
         scroll-behavior: smooth;
       }
 
       .chat-messages::-webkit-scrollbar {
-        width: 6px;
+        width: ${UniversalChatWidget.SIZES.SCROLLBAR_WIDTH}px;
       }
 
       .chat-messages::-webkit-scrollbar-thumb {
@@ -985,7 +1074,7 @@ class UniversalChatWidget {
         resize: none;
         font-family: inherit;
         font-size: 0.95rem;
-        max-height: 100px;
+        max-height: ${UniversalChatWidget.SIZES.INPUT_MAX_HEIGHT}px;
         background: transparent;
         color: ${this.options.inputTextColor};
       }
@@ -1038,7 +1127,7 @@ class UniversalChatWidget {
       }
 
       /* Mobile Fullscreen */
-      @media (max-width: 768px) {
+      @media (max-width: ${UniversalChatWidget.SIZES.MOBILE_BREAKPOINT}px) {
         .universal-chat-window {
           width: 100vw !important;
           height: 100vh !important;
@@ -1333,7 +1422,10 @@ class UniversalChatWidget {
       "<span></span><span></span><span></span>";
     this.buttonTypingIndicator.style.display = "none";
     this.buttonTypingIndicator.setAttribute("role", "status");
-    this.buttonTypingIndicator.setAttribute("aria-label", "Assistant is typing");
+    this.buttonTypingIndicator.setAttribute(
+      "aria-label",
+      "Assistant is typing",
+    );
     this.button.appendChild(this.buttonTypingIndicator);
 
     // Create window
@@ -1364,7 +1456,7 @@ class UniversalChatWidget {
           <textarea
             class="chat-input"
             placeholder="${this.options.placeholder}"
-            maxlength="2000"
+            maxlength="${UniversalChatWidget.LIMITS.MAX_MESSAGE_LENGTH}"
             rows="1"
             aria-label="Type your message"
             aria-describedby="char-limit"></textarea>
@@ -1372,7 +1464,7 @@ class UniversalChatWidget {
             Send
           </button>
         </div>
-        <div id="char-limit" class="sr-only">Maximum 2000 characters</div>
+        <div id="char-limit" class="sr-only">Maximum ${UniversalChatWidget.LIMITS.MAX_MESSAGE_LENGTH} characters</div>
       </div>
     `;
 
@@ -1414,7 +1506,7 @@ class UniversalChatWidget {
     this.inputEl.addEventListener("input", () => {
       this.sendBtn.disabled = !this.inputEl.value.trim();
       // Debounce auto-resize for better performance during rapid typing
-      this.debounce('autoResize', () => this.autoResizeInput(), 100);
+      this.debounce("autoResize", () => this.autoResizeInput(), UniversalChatWidget.TIMINGS.DEBOUNCE_INPUT);
     });
 
     // iOS keyboard handling
@@ -1422,14 +1514,14 @@ class UniversalChatWidget {
       setTimeout(() => {
         this.inputEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
         // Adjust messages padding to prevent content from being hidden
-        if (window.innerWidth <= 768) {
-          this.messagesEl.style.paddingBottom = "180px";
+        if (window.innerWidth <= UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) {
+          this.messagesEl.style.paddingBottom = `${UniversalChatWidget.SIZES.MOBILE_PADDING_BOTTOM}px`;
         }
-      }, 300);
+      }, UniversalChatWidget.TIMINGS.IOS_KEYBOARD_DELAY);
     });
 
     this.inputEl.addEventListener("blur", () => {
-      if (window.innerWidth <= 768) {
+      if (window.innerWidth <= UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) {
         this.messagesEl.style.paddingBottom = "";
       }
     });
@@ -1443,7 +1535,7 @@ class UniversalChatWidget {
 
   autoResizeInput() {
     this.inputEl.style.height = "auto";
-    this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, 100) + "px";
+    this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, UniversalChatWidget.SIZES.INPUT_MAX_HEIGHT) + "px";
   }
 
   toggle() {
@@ -1460,7 +1552,7 @@ class UniversalChatWidget {
     this.button.setAttribute("aria-expanded", "true");
 
     // Set aria-modal to true on mobile
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) {
       this.window.setAttribute("aria-modal", "true");
     }
 
@@ -1472,10 +1564,10 @@ class UniversalChatWidget {
     // Focus management: move focus to input field
     setTimeout(() => {
       this.inputEl.focus();
-    }, 100);
+    }, UniversalChatWidget.TIMINGS.FOCUS_DELAY);
 
     // Set up focus trap for mobile
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) {
       this.setupFocusTrap();
     }
 
@@ -1539,7 +1631,10 @@ class UniversalChatWidget {
 
       if (!response.ok) {
         // Detect specific error type from response
-        const errorInfo = this.detectErrorType(new Error(data.error || "Request failed"), response);
+        const errorInfo = this.detectErrorType(
+          new Error(data.error || "Request failed"),
+          response,
+        );
         throw { ...errorInfo, response };
       }
 
@@ -1605,7 +1700,7 @@ class UniversalChatWidget {
         this.button.style.animation = "pulse 0.5s ease 3";
         setTimeout(() => {
           this.button.style.animation = "";
-        }, 1500);
+        }, UniversalChatWidget.TIMINGS.PULSE_ANIMATION);
       }
 
       // Clear last failed message on success
@@ -1696,7 +1791,7 @@ class UniversalChatWidget {
         message.length > 60 ? message.substring(0, 60) + "..." : message;
       preview.textContent = truncated;
       this.button.appendChild(preview);
-      this.previewTimeout = setTimeout(() => this.hideMessagePreview(), 5000);
+      this.previewTimeout = setTimeout(() => this.hideMessagePreview(), UniversalChatWidget.TIMINGS.PREVIEW_TIMEOUT);
     }
   }
 
@@ -1797,11 +1892,11 @@ class UniversalChatWidget {
       hasInteracted: this.hasInteracted,
       traceId: this.traceId, // Persist trace ID for conversation continuity
     };
-    
+
     if (this.options.debug) {
       console.log("Client saving state with traceId:", this.traceId);
     }
-    
+
     sessionStorage.setItem("universalChatState", JSON.stringify(stateToSave));
   }
 
@@ -1812,9 +1907,12 @@ class UniversalChatWidget {
       this.history = state.history || [];
       this.hasInteracted = state.hasInteracted || false;
       this.traceId = state.traceId || null; // Restore trace ID for conversation continuity
-      
+
       if (this.options.debug) {
-        console.log("Client restored traceId from sessionStorage:", this.traceId);
+        console.log(
+          "Client restored traceId from sessionStorage:",
+          this.traceId,
+        );
       }
 
       if (this.history.length > 0) {
@@ -1834,11 +1932,11 @@ class UniversalChatWidget {
   // Cleanup method to prevent memory leaks
   destroy() {
     // Clear all timers
-    Object.values(this.debounceTimers).forEach(timer => clearTimeout(timer));
+    Object.values(this.debounceTimers).forEach((timer) => clearTimeout(timer));
     this.debounceTimers = {};
 
     // Cancel all RAF requests
-    Object.values(this.rafIds).forEach(id => cancelAnimationFrame(id));
+    Object.values(this.rafIds).forEach((id) => cancelAnimationFrame(id));
     this.rafIds = {};
 
     // Clear preview timeout

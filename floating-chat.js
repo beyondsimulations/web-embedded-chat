@@ -703,6 +703,13 @@ class UniversalChatWidget {
     }
   }
 
+  /**
+   * Renders citations in a message with clickable links and reference sections
+   * Supports both structured source data and inline citation parsing
+   * @param {HTMLElement} messageElement - Message DOM element to process
+   * @param {SourceData[]} [sources=[]] - Array of source data with documents and metadata
+   * @returns {void}
+   */
   renderCitations(messageElement, sources = []) {
     const messageBubble = messageElement.querySelector(".message-bubble");
     if (!messageBubble) return;
@@ -891,6 +898,12 @@ class UniversalChatWidget {
     }
   }
 
+  /**
+   * Validates API endpoint URL for security and format
+   * Only accepts HTTP/HTTPS protocols to prevent security risks
+   * @param {string} endpoint - API endpoint URL to validate
+   * @returns {string|null} Valid endpoint URL or null if invalid
+   */
   validateApiEndpoint(endpoint) {
     if (!endpoint) return null;
     try {
@@ -906,6 +919,12 @@ class UniversalChatWidget {
     }
   }
 
+  /**
+   * Validates and sanitizes AI model name for security
+   * Restricts to alphanumeric characters, hyphens, underscores, and dots only
+   * @param {string} model - AI model name to validate
+   * @returns {string|null} Valid model name (truncated to limit) or null if invalid
+   */
   validateModel(model) {
     if (!model || typeof model !== "string") return null;
     // Allow alphanumeric, hyphens, underscores, and dots only
@@ -916,6 +935,11 @@ class UniversalChatWidget {
     return model.substring(0, UniversalChatWidget.LIMITS.MODEL_NAME_LENGTH);
   }
 
+  /**
+   * Ensures proper viewport meta tag exists for mobile compatibility
+   * Adds viewport-fit=cover for iOS safe area support (notch/home indicator)
+   * @returns {void}
+   */
   ensureViewportMeta() {
     // Check if viewport meta tag exists and includes viewport-fit=cover
     let viewportMeta = document.querySelector('meta[name="viewport"]');
@@ -933,6 +957,11 @@ class UniversalChatWidget {
     }
   }
 
+  /**
+   * Initializes the chat widget by setting up viewport, styles, DOM, events, and state
+   * Optionally auto-opens the chat window if configured with startOpen option
+   * @returns {void}
+   */
   init() {
     this.ensureViewportMeta();
     this.injectStyles();
@@ -945,6 +974,11 @@ class UniversalChatWidget {
     }
   }
 
+  /**
+   * Injects CSS styles for the chat widget into the document head
+   * Only injects once (checks for existing styles), applies all theme colors and responsive behavior
+   * @returns {void}
+   */
   injectStyles() {
     if (document.getElementById("universal-chat-styles")) return;
 
@@ -1590,6 +1624,11 @@ class UniversalChatWidget {
     document.head.appendChild(styles);
   }
 
+  /**
+   * Creates and appends the chat widget DOM elements (button and window) to the document
+   * Sets up accessibility attributes, initial welcome message, and references to key elements
+   * @returns {void}
+   */
   createWidget() {
     // Create button
     this.button = document.createElement("button");
@@ -1677,6 +1716,11 @@ class UniversalChatWidget {
     this.renderCitations(this.messagesEl.querySelector(".message"), []);
   }
 
+  /**
+   * Binds all event listeners for user interactions
+   * Handles button clicks, input events, keyboard shortcuts, and mobile keyboard behavior
+   * @returns {void}
+   */
   bindEvents() {
     this.button.addEventListener("click", () => this.toggle());
     this.window
@@ -1724,15 +1768,29 @@ class UniversalChatWidget {
     });
   }
 
+  /**
+   * Automatically adjusts input textarea height based on content
+   * Limits height to INPUT_MAX_HEIGHT to prevent excessive expansion
+   * @returns {void}
+   */
   autoResizeInput() {
     this.inputEl.style.height = "auto";
     this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, UniversalChatWidget.SIZES.INPUT_MAX_HEIGHT) + "px";
   }
 
+  /**
+   * Toggles chat window visibility between open and closed states
+   * @returns {void}
+   */
   toggle() {
     this.isOpen ? this.close() : this.open();
   }
 
+  /**
+   * Opens the chat window with animations and accessibility updates
+   * Sets focus to input field, clears unread count, and sets up mobile focus trap if needed
+   * @returns {void}
+   */
   open() {
     this.isOpen = true;
     this.hasInteracted = true;
@@ -1765,6 +1823,11 @@ class UniversalChatWidget {
     this.saveState();
   }
 
+  /**
+   * Closes the chat window with animations and accessibility updates
+   * Returns focus to chat button, removes focus trap, and saves state
+   * @returns {void}
+   */
   close() {
     this.isOpen = false;
     this.window.classList.remove("open");
@@ -1783,6 +1846,12 @@ class UniversalChatWidget {
     this.saveState();
   }
 
+  /**
+   * Sends a user message to the API endpoint and handles the response
+   * Manages history optimization, error handling, retry logic, and citation rendering
+   * @param {string|null} [retryMessage=null] - Optional message for retry (uses input value if null)
+   * @returns {Promise<void>}
+   */
   async sendMessage(retryMessage = null) {
     // Get message from input or use retry message
     const message = retryMessage || this.inputEl.value.trim();
@@ -1943,6 +2012,10 @@ class UniversalChatWidget {
     this.inputEl.focus();
   }
 
+  /**
+   * Displays animated typing indicator in chat and on button when chat is closed
+   * @returns {void}
+   */
   showTyping() {
     const typingEl = document.createElement("div");
     typingEl.className = "message assistant";
@@ -1965,6 +2038,10 @@ class UniversalChatWidget {
     }
   }
 
+  /**
+   * Removes typing indicator from chat and button
+   * @returns {void}
+   */
   hideTyping() {
     const typingEl = document.getElementById("typing-indicator");
     if (typingEl) typingEl.remove();
@@ -1972,6 +2049,12 @@ class UniversalChatWidget {
     this.button.classList.remove("has-preview");
   }
 
+  /**
+   * Shows message preview popup near chat button when chat is closed
+   * Auto-hides after PREVIEW_TIMEOUT milliseconds
+   * @param {string} message - Message text to preview (truncated to 60 chars)
+   * @returns {void}
+   */
   showMessagePreview(message) {
     if (!this.isOpen && message) {
       this.hideMessagePreview();
@@ -1986,12 +2069,25 @@ class UniversalChatWidget {
     }
   }
 
+  /**
+   * Hides and removes the message preview popup
+   * Clears any pending preview timeout
+   * @returns {void}
+   */
   hideMessagePreview() {
     const preview = document.getElementById("message-preview");
     if (preview) preview.remove();
     if (this.previewTimeout) clearTimeout(this.previewTimeout);
   }
 
+  /**
+   * Adds a formatted message to the chat interface
+   * Handles markdown formatting, LaTeX rendering, code blocks, and citations
+   * @param {"user"|"assistant"} type - Message sender type
+   * @param {string} content - Raw message content (will be formatted)
+   * @param {SourceData[]} [sources=[]] - Citation source data for assistant messages
+   * @returns {void}
+   */
   addMessage(type, content, sources = []) {
     const messageEl = document.createElement("div");
     messageEl.className = `message ${type}`;
@@ -2023,6 +2119,12 @@ class UniversalChatWidget {
     });
   }
 
+  /**
+   * Formats message content from markdown to HTML
+   * Escapes HTML, then applies markdown transformations for headers, bold, italic, code blocks
+   * @param {string} content - Raw markdown content
+   * @returns {string} HTML-formatted message content
+   */
   formatMessage(content) {
     const escaped = content
       .replace(/&/g, "&amp;")
@@ -2042,10 +2144,19 @@ class UniversalChatWidget {
       .replace(/(<\/pre>)<br>/g, "$1");
   }
 
+  /**
+   * Formats a Date object as a localized time string (HH:MM format)
+   * @param {Date} date - Date object to format
+   * @returns {string} Formatted time string
+   */
   formatTime(date) {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  /**
+   * Updates the visibility and count of the unread message badge on the chat button
+   * @returns {void}
+   */
   updateUnreadBadge() {
     if (this.unreadCount > 0) {
       this.unreadBadge.textContent = this.unreadCount;
@@ -2055,6 +2166,11 @@ class UniversalChatWidget {
     }
   }
 
+  /**
+   * Clears all chat history and resets the interface to initial welcome message
+   * Preserves widget state but removes all conversation data
+   * @returns {void}
+   */
   clearChat() {
     this.history = [];
     this.messagesEl.innerHTML = `
@@ -2077,6 +2193,11 @@ class UniversalChatWidget {
     this.saveState();
   }
 
+  /**
+   * Saves current chat state to sessionStorage for persistence across page refreshes
+   * Stores conversation history, interaction status, and trace ID for API continuity
+   * @returns {void}
+   */
   saveState() {
     const stateToSave = {
       history: this.history,
@@ -2091,6 +2212,11 @@ class UniversalChatWidget {
     sessionStorage.setItem("universalChatState", JSON.stringify(stateToSave));
   }
 
+  /**
+   * Restores chat state from sessionStorage on widget initialization
+   * Rebuilds message history in UI and restores trace ID for conversation continuity
+   * @returns {void}
+   */
   restoreState() {
     const saved = sessionStorage.getItem("universalChatState");
     if (saved) {

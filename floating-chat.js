@@ -1634,9 +1634,10 @@ class UniversalChatWidget {
     this.button = document.createElement("button");
     this.button.className = "universal-chat-button";
     this.button.innerHTML = "💬";
-    this.button.setAttribute("aria-label", "Open chat");
+    this.button.setAttribute("aria-label", "Open chat. Press Enter to open, Escape to close");
     this.button.setAttribute("aria-expanded", "false");
     this.button.setAttribute("aria-haspopup", "dialog");
+    this.button.title = "Open chat (Enter)";
 
     // Add unread badge
     this.unreadBadge = document.createElement("span");
@@ -1688,13 +1689,14 @@ class UniversalChatWidget {
             placeholder="${this.options.placeholder}"
             maxlength="${UniversalChatWidget.LIMITS.MAX_MESSAGE_LENGTH}"
             rows="1"
-            aria-label="Type your message"
-            aria-describedby="char-limit"></textarea>
-          <button class="chat-send-btn" disabled aria-label="Send message">
+            aria-label="Type your message. Press Enter to send, Shift+Enter for new line"
+            aria-describedby="char-limit keyboard-hints"></textarea>
+          <button class="chat-send-btn" disabled aria-label="Send message (Enter)">
             Send
           </button>
         </div>
         <div id="char-limit" class="sr-only">Maximum ${UniversalChatWidget.LIMITS.MAX_MESSAGE_LENGTH} characters</div>
+        <div id="keyboard-hints" class="sr-only">Keyboard shortcuts: Enter to send, Shift+Enter for new line, Escape to close chat</div>
       </div>
     `;
 
@@ -1797,8 +1799,9 @@ class UniversalChatWidget {
     this.window.classList.add("open");
     this.button.classList.add("chat-open");
     this.button.innerHTML = "×";
-    this.button.setAttribute("aria-label", "Close chat");
+    this.button.setAttribute("aria-label", "Close chat. Press Escape or Enter to close");
     this.button.setAttribute("aria-expanded", "true");
+    this.button.title = "Close chat (Escape)";
 
     // Set aria-modal to true on mobile
     if (window.innerWidth <= UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) {
@@ -1833,8 +1836,9 @@ class UniversalChatWidget {
     this.window.classList.remove("open");
     this.button.classList.remove("chat-open");
     this.button.innerHTML = "💬";
-    this.button.setAttribute("aria-label", "Open chat");
+    this.button.setAttribute("aria-label", "Open chat. Press Enter to open, Escape to close");
     this.button.setAttribute("aria-expanded", "false");
+    this.button.title = "Open chat (Enter)";
     this.window.setAttribute("aria-modal", "false");
 
     // Remove focus trap

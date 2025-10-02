@@ -466,10 +466,10 @@ class UniversalChatWidget {
     if (!this.window) return [];
 
     const focusableSelectors = [
-      "button:not([disabled])",
-      "a[href]",
-      "input:not([disabled])",
-      "textarea:not([disabled])",
+      "button:not([disabled]):not([tabindex='-1'])",
+      "a[href]:not([tabindex='-1'])",
+      "input:not([disabled]):not([tabindex='-1'])",
+      "textarea:not([disabled]):not([tabindex='-1'])",
       '[tabindex]:not([tabindex="-1"])',
     ].join(", ");
 
@@ -1043,9 +1043,12 @@ class UniversalChatWidget {
         font-size: 28px;
       }
 
-      .universal-chat-button:hover {
+      /* Unified hover and focus styles for chat button */
+      .universal-chat-button:hover,
+      .universal-chat-button:focus {
+        background: ${this.options.stampColor};
         transform: scale(1.1);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
       }
 
       .universal-chat-button.chat-open {
@@ -1053,8 +1056,11 @@ class UniversalChatWidget {
         background: ${this.options.userColor};
       }
 
-      .universal-chat-button.chat-open:hover {
-        transform: rotate(90deg) scale(0.9);
+      .universal-chat-button.chat-open:hover,
+      .universal-chat-button.chat-open:focus {
+        background: ${this.options.stampColor};
+        transform: rotate(90deg) scale(1.1);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
       }
 
       /* Unread Badge */
@@ -1189,13 +1195,11 @@ class UniversalChatWidget {
         font-size: 28px;
       }
 
-      .chat-header-btn:hover {
-        opacity: 0.7;
-      }
-
-      /* Header button focus style - red color when focused */
+      /* Unified hover and focus styles for header buttons */
+      .chat-header-btn:hover,
       .chat-header-btn:focus {
         color: ${this.options.stampColor} !important;
+        transform: scale(1.1);
         opacity: 1 !important;
         outline: none !important;
       }
@@ -1355,10 +1359,13 @@ class UniversalChatWidget {
         white-space: nowrap;
       }
 
-      .chat-send-btn:hover:not(:disabled):not([aria-disabled="true"]) {
+      /* Unified hover and focus styles for send button */
+      .chat-send-btn:hover:not(:disabled):not([aria-disabled="true"]),
+      .chat-send-btn:focus:not(:disabled):not([aria-disabled="true"]) {
+        background: ${this.options.stampColor} !important;
         transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        background: ${this.options.userColor};
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        outline: none !important;
       }
 
       .chat-send-btn:disabled,
@@ -1367,12 +1374,14 @@ class UniversalChatWidget {
         cursor: not-allowed;
       }
 
-      /* Send button focus style - red background when focused */
-      .chat-send-btn:focus {
-        background: ${this.options.stampColor} !important;
-        outline: none !important;
-        transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+      /* Disabled button should not show hover/focus effects */
+      .chat-send-btn:disabled:hover,
+      .chat-send-btn:disabled:focus,
+      .chat-send-btn[aria-disabled="true"]:hover,
+      .chat-send-btn[aria-disabled="true"]:focus {
+        transform: none !important;
+        box-shadow: none !important;
+        background: ${backgroundStyle} !important;
       }
 
       /* Model info badge */
@@ -1496,8 +1505,12 @@ class UniversalChatWidget {
         z-index: 1;
       }
 
-      .code-copy-btn:hover {
+      /* Unified hover and focus styles for code copy button */
+      .code-copy-btn:hover,
+      .code-copy-btn:focus {
         background: ${this.options.stampColor};
+        transform: scale(1.05);
+        outline: none;
       }
 
       .message-bubble pre:hover .code-copy-btn {
@@ -1539,9 +1552,13 @@ class UniversalChatWidget {
         font-size: 0.85em;
       }
 
-      .citation-link:hover {
-        background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
-        color: ${this.options.codeTextColor};
+      /* Unified hover and focus styles for citation links */
+      .citation-link:hover,
+      .citation-link:focus {
+        background: ${this.options.stampColor};
+        color: ${this.options.titleFontColor};
+        transform: scale(1.05);
+        outline: none;
       }
 
       .references-section {
@@ -1606,24 +1623,6 @@ class UniversalChatWidget {
         border-width: 0;
       }
 
-      /* Focus visible styles for better keyboard navigation */
-      /* Using :focus for programmatic focus from focus trap */
-      .citation-link:focus,
-      .retry-btn:focus,
-      .code-copy-btn:focus {
-        outline: 3px solid ${this.options.userColor} !important;
-        outline-offset: 2px;
-        box-shadow: 0 0 0 5px ${this.hexToRgba(this.options.userColor, 0.2)} !important;
-      }
-
-      /* Chat button focus style - red background when focused */
-      .universal-chat-button:focus {
-        background: ${this.options.stampColor} !important;
-        outline: none !important;
-        transform: scale(1.1);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3) !important;
-      }
-
       /* Input field focus style - red blinking cursor, no border */
       .chat-input:focus {
         outline: none !important;
@@ -1667,9 +1666,13 @@ class UniversalChatWidget {
         gap: 0.5rem;
       }
 
-      .retry-btn:hover {
+      /* Unified hover and focus styles for retry button */
+      .retry-btn:hover:not(:disabled),
+      .retry-btn:focus:not(:disabled) {
+        background: ${this.options.stampColor};
         transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        outline: none;
       }
 
       .retry-btn:disabled {
@@ -1749,7 +1752,7 @@ class UniversalChatWidget {
             rows="1"
             aria-label="Type your message. Press Enter to send, Shift+Enter for new line"
             aria-describedby="char-limit keyboard-hints"></textarea>
-          <button class="chat-send-btn" tabindex="0" aria-disabled="true" aria-label="Send message (Enter)">
+          <button class="chat-send-btn" tabindex="-1" aria-disabled="true" aria-label="Send message (Enter)">
             Send
           </button>
         </div>
@@ -1808,6 +1811,7 @@ class UniversalChatWidget {
     this.inputEl.addEventListener("input", () => {
       const hasText = this.inputEl.value.trim().length > 0;
       this.sendBtn.setAttribute("aria-disabled", hasText ? "false" : "true");
+      this.sendBtn.setAttribute("tabindex", hasText ? "0" : "-1");
       // Debounce auto-resize for better performance during rapid typing
       this.debounce("autoResize", () => this.autoResizeInput(), UniversalChatWidget.TIMINGS.DEBOUNCE_INPUT);
     });
@@ -1931,6 +1935,7 @@ class UniversalChatWidget {
       this.inputEl.value = "";
       this.autoResizeInput();
       this.sendBtn.setAttribute("aria-disabled", "true");
+      this.sendBtn.setAttribute("tabindex", "-1");
     }
 
     this.showTyping();

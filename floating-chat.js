@@ -473,46 +473,73 @@ class UniversalChatWidget {
       '[tabindex]:not([tabindex="-1"])',
     ].join(", ");
 
-    return Array.from(this.window.querySelectorAll(focusableSelectors));
+    const elements = Array.from(this.window.querySelectorAll(focusableSelectors));
+
+    // Debug logging (only when debug mode is enabled)
+    if (this.options.debug) {
+      console.log("Focusable elements found:", elements.length);
+      elements.forEach((el, i) => {
+        console.log(`  ${i}: ${el.tagName}.${el.className} - aria-disabled: ${el.getAttribute('aria-disabled')}, tabindex: ${el.getAttribute('tabindex')}`);
+      });
+    }
+
+    return elements;
   }
 
   /**
-   * Traps keyboard focus within chat window (mobile fullscreen only)
-   * Ensures Tab navigation cycles through focusable elements
+   * Traps keyboard focus within chat window for better accessibility
+   * Ensures Tab navigation cycles through focusable elements and doesn't escape to browser UI
    * @param {KeyboardEvent} e - Keyboard event
    * @returns {void}
    */
   trapFocus(e) {
-    // Only trap focus on mobile when window is open
-    if (!this.isOpen || window.innerWidth > UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) return;
+    // Only trap focus when window is open and Tab key is pressed
+    if (!this.isOpen || e.key !== "Tab") return;
+
+    e.preventDefault(); // Always prevent default Tab behavior
 
     const focusableElements = this.getFocusableElements();
     if (focusableElements.length === 0) return;
 
-    const firstElement = focusableElements[0];
-    const lastElement = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement;
+    const currentIndex = focusableElements.indexOf(activeElement);
 
-    // If Tab is pressed
-    if (e.key === "Tab") {
-      // Shift + Tab (going backwards)
-      if (e.shiftKey) {
-        if (document.activeElement === firstElement) {
-          e.preventDefault();
-          lastElement.focus();
-        }
-      }
-      // Tab (going forwards)
-      else {
-        if (document.activeElement === lastElement) {
-          e.preventDefault();
-          firstElement.focus();
-        }
-      }
+    if (this.options.debug) {
+      console.log(`Tab pressed! Shift: ${e.shiftKey}, Current element:`, activeElement.className, `Index: ${currentIndex}`);
     }
+
+    // If current element is not in the list or outside chat, start from beginning/end
+    if (currentIndex === -1) {
+      if (this.options.debug) {
+        console.log("Current element not in list, resetting to start/end");
+      }
+      if (e.shiftKey) {
+        focusableElements[focusableElements.length - 1].focus();
+      } else {
+        focusableElements[0].focus();
+      }
+      return;
+    }
+
+    // Calculate next index with wrapping
+    let nextIndex;
+    if (e.shiftKey) {
+      // Shift+Tab: go backwards, wrap to end if at start
+      nextIndex = currentIndex === 0 ? focusableElements.length - 1 : currentIndex - 1;
+    } else {
+      // Tab: go forwards, wrap to start if at end
+      nextIndex = currentIndex === focusableElements.length - 1 ? 0 : currentIndex + 1;
+    }
+
+    if (this.options.debug) {
+      console.log(`Moving from index ${currentIndex} to ${nextIndex}:`, focusableElements[nextIndex].className);
+    }
+    focusableElements[nextIndex].focus();
   }
 
   /**
-   * Sets up focus trap event listener for mobile accessibility
+   * Sets up focus trap event listener for accessibility
+   * Prevents Tab key from escaping chat window to browser UI
    * @returns {void}
    */
   setupFocusTrap() {
@@ -1166,6 +1193,13 @@ class UniversalChatWidget {
         opacity: 0.7;
       }
 
+      /* Header button focus style - red color when focused */
+      .chat-header-btn:focus {
+        color: ${this.options.stampColor} !important;
+        opacity: 1 !important;
+        outline: none !important;
+      }
+
       /* Messages */
       .chat-messages {
         flex: 1;
@@ -1304,14 +1338,6 @@ class UniversalChatWidget {
         color: ${this.options.inputTextColor};
       }
 
-      .chat-input:focus {
-        outline: none;
-      }
-
-      .chat-input-container:focus-within {
-        box-shadow: 0 0 0 6px ${this.options.secondaryColor}20;
-      }
-
       .chat-send-btn {
         padding: 0.75rem 1rem;
         background: ${backgroundStyle};
@@ -1329,15 +1355,24 @@ class UniversalChatWidget {
         white-space: nowrap;
       }
 
-      .chat-send-btn:hover:not(:disabled) {
+      .chat-send-btn:hover:not(:disabled):not([aria-disabled="true"]) {
         transform: scale(1.05);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         background: ${this.options.userColor};
       }
 
-      .chat-send-btn:disabled {
+      .chat-send-btn:disabled,
+      .chat-send-btn[aria-disabled="true"] {
         opacity: 0.5;
         cursor: not-allowed;
+      }
+
+      /* Send button focus style - red background when focused */
+      .chat-send-btn:focus {
+        background: ${this.options.stampColor} !important;
+        outline: none !important;
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
       }
 
       /* Model info badge */
@@ -1572,13 +1607,35 @@ class UniversalChatWidget {
       }
 
       /* Focus visible styles for better keyboard navigation */
+      /* Using :focus for programmatic focus from focus trap */
       .citation-link:focus,
-      .chat-send-btn:focus,
-      .chat-header-btn:focus,
-      .chat-input:focus {
-        outline: 2px solid ${this.options.userColor};
+      .retry-btn:focus,
+      .code-copy-btn:focus {
+        outline: 3px solid ${this.options.userColor} !important;
         outline-offset: 2px;
+        box-shadow: 0 0 0 5px ${this.hexToRgba(this.options.userColor, 0.2)} !important;
       }
+
+      /* Chat button focus style - red background when focused */
+      .universal-chat-button:focus {
+        background: ${this.options.stampColor} !important;
+        outline: none !important;
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3) !important;
+      }
+
+      /* Input field focus style - red blinking cursor, no border */
+      .chat-input:focus {
+        outline: none !important;
+        caret-color: ${this.options.stampColor};
+      }
+
+      /* Remove the container focus style as well */
+      .chat-input-container:focus-within {
+        box-shadow: none !important;
+      }
+
+      /* Fallback removed - we now use :focus directly for all elements */
 
       /* Error message styles */
       .message.error {
@@ -1637,6 +1694,7 @@ class UniversalChatWidget {
     this.button.setAttribute("aria-label", "Open chat. Press Enter to open, Escape to close");
     this.button.setAttribute("aria-expanded", "false");
     this.button.setAttribute("aria-haspopup", "dialog");
+    this.button.setAttribute("tabindex", "0");
     this.button.title = "Open chat (Enter)";
 
     // Add unread badge
@@ -1691,7 +1749,7 @@ class UniversalChatWidget {
             rows="1"
             aria-label="Type your message. Press Enter to send, Shift+Enter for new line"
             aria-describedby="char-limit keyboard-hints"></textarea>
-          <button class="chat-send-btn" disabled aria-label="Send message (Enter)">
+          <button class="chat-send-btn" tabindex="0" aria-disabled="true" aria-label="Send message (Enter)">
             Send
           </button>
         </div>
@@ -1731,17 +1789,25 @@ class UniversalChatWidget {
     this.window
       .querySelector(".chat-clear-btn")
       .addEventListener("click", () => this.clearChat());
-    this.sendBtn.addEventListener("click", () => this.sendMessage());
+    this.sendBtn.addEventListener("click", () => {
+      // Don't send if button is aria-disabled
+      if (this.sendBtn.getAttribute("aria-disabled") === "true") return;
+      this.sendMessage();
+    });
 
     this.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        this.sendMessage();
+        // Only send if button is not aria-disabled
+        if (this.sendBtn.getAttribute("aria-disabled") !== "true") {
+          this.sendMessage();
+        }
       }
     });
 
     this.inputEl.addEventListener("input", () => {
-      this.sendBtn.disabled = !this.inputEl.value.trim();
+      const hasText = this.inputEl.value.trim().length > 0;
+      this.sendBtn.setAttribute("aria-disabled", hasText ? "false" : "true");
       // Debounce auto-resize for better performance during rapid typing
       this.debounce("autoResize", () => this.autoResizeInput(), UniversalChatWidget.TIMINGS.DEBOUNCE_INPUT);
     });
@@ -1790,7 +1856,7 @@ class UniversalChatWidget {
 
   /**
    * Opens the chat window with animations and accessibility updates
-   * Sets focus to input field, clears unread count, and sets up mobile focus trap if needed
+   * Sets focus to input field, clears unread count, and sets up focus trap for keyboard navigation
    * @returns {void}
    */
   open() {
@@ -1801,12 +1867,11 @@ class UniversalChatWidget {
     this.button.innerHTML = "×";
     this.button.setAttribute("aria-label", "Close chat. Press Escape or Enter to close");
     this.button.setAttribute("aria-expanded", "true");
+    this.button.setAttribute("tabindex", "-1"); // Remove from tab order when chat is open
     this.button.title = "Close chat (Escape)";
 
-    // Set aria-modal to true on mobile
-    if (window.innerWidth <= UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) {
-      this.window.setAttribute("aria-modal", "true");
-    }
+    // Set aria-modal to true since focus is trapped
+    this.window.setAttribute("aria-modal", "true");
 
     this.unreadCount = 0;
     this.updateUnreadBadge();
@@ -1818,10 +1883,8 @@ class UniversalChatWidget {
       this.inputEl.focus();
     }, UniversalChatWidget.TIMINGS.FOCUS_DELAY);
 
-    // Set up focus trap for mobile
-    if (window.innerWidth <= UniversalChatWidget.SIZES.MOBILE_BREAKPOINT) {
-      this.setupFocusTrap();
-    }
+    // Set up focus trap to prevent Tab from escaping to browser UI
+    this.setupFocusTrap();
 
     this.saveState();
   }
@@ -1838,6 +1901,7 @@ class UniversalChatWidget {
     this.button.innerHTML = "💬";
     this.button.setAttribute("aria-label", "Open chat. Press Enter to open, Escape to close");
     this.button.setAttribute("aria-expanded", "false");
+    this.button.setAttribute("tabindex", "0"); // Restore to tab order when chat is closed
     this.button.title = "Open chat (Enter)";
     this.window.setAttribute("aria-modal", "false");
 
@@ -1866,7 +1930,7 @@ class UniversalChatWidget {
       this.addMessage("user", message);
       this.inputEl.value = "";
       this.autoResizeInput();
-      this.sendBtn.disabled = true;
+      this.sendBtn.setAttribute("aria-disabled", "true");
     }
 
     this.showTyping();

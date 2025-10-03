@@ -241,6 +241,17 @@ class UniversalChatWidget {
   }
 
   /**
+   * Creates a color-mix CSS value with specified opacity using modern CSS
+   * @param {string} color - Base color value
+   * @param {number} opacity - Opacity value from 0.0 to 1.0
+   * @returns {string} CSS color-mix expression
+   */
+  getColorWithOpacity(color, opacity) {
+    const transparentPercent = (1 - opacity) * 100;
+    return `color-mix(in srgb, ${color}, transparent ${transparentPercent}%)`;
+  }
+
+  /**
    * Escapes HTML special characters to prevent XSS attacks
    * @param {*} unsafe - Input string to escape (automatically handles non-string types)
    * @returns {string} HTML-safe string with escaped special characters
@@ -926,24 +937,66 @@ class UniversalChatWidget {
   }
 
   /**
+   * Generic validation method for input sanitization
+   * @param {any} value - Value to validate
+   * @param {Object} rules - Validation rules object
+   * @param {string} rules.type - Expected type ('string', 'url')
+   * @param {RegExp} [rules.pattern] - Regex pattern to match
+   * @param {string[]} [rules.allowedProtocols] - Allowed URL protocols
+   * @param {number} [rules.maxLength] - Maximum string length
+   * @param {string} [rules.errorPrefix] - Error message prefix
+   * @returns {any|null} Validated value or null if invalid
+   */
+  validate(value, rules) {
+    if (!value) return null;
+
+    // Type validation
+    if (rules.type === 'string' && typeof value !== 'string') {
+      console.warn(`${rules.errorPrefix}: Expected string`);
+      return null;
+    }
+
+    // URL validation
+    if (rules.type === 'url') {
+      try {
+        const url = new URL(value);
+        if (rules.allowedProtocols && !rules.allowedProtocols.includes(url.protocol)) {
+          console.warn(`${rules.errorPrefix}: Protocol not allowed`);
+          return null;
+        }
+        return value;
+      } catch (e) {
+        console.warn(`${rules.errorPrefix}: Invalid URL format`);
+        return null;
+      }
+    }
+
+    // Pattern validation
+    if (rules.pattern && !rules.pattern.test(value)) {
+      console.warn(`${rules.errorPrefix}: Pattern validation failed`);
+      return null;
+    }
+
+    // Length truncation
+    if (rules.maxLength && typeof value === 'string') {
+      return value.substring(0, rules.maxLength);
+    }
+
+    return value;
+  }
+
+  /**
    * Validates API endpoint URL for security and format
    * Only accepts HTTP/HTTPS protocols to prevent security risks
    * @param {string} endpoint - API endpoint URL to validate
    * @returns {string|null} Valid endpoint URL or null if invalid
    */
   validateApiEndpoint(endpoint) {
-    if (!endpoint) return null;
-    try {
-      const url = new URL(endpoint);
-      if (!["https:", "http:"].includes(url.protocol)) {
-        console.warn("Chat Widget: Only HTTP/HTTPS endpoints allowed");
-        return null;
-      }
-      return endpoint;
-    } catch (e) {
-      console.warn("Chat Widget: Invalid API endpoint provided");
-      return null;
-    }
+    return this.validate(endpoint, {
+      type: 'url',
+      allowedProtocols: ['https:', 'http:'],
+      errorPrefix: 'Chat Widget: API endpoint'
+    });
   }
 
   /**
@@ -953,13 +1006,12 @@ class UniversalChatWidget {
    * @returns {string|null} Valid model name (truncated to limit) or null if invalid
    */
   validateModel(model) {
-    if (!model || typeof model !== "string") return null;
-    // Allow alphanumeric, hyphens, underscores, and dots only
-    if (!/^[a-zA-Z0-9\-_.]+$/.test(model)) {
-      console.warn("Chat Widget: Invalid model name provided");
-      return null;
-    }
-    return model.substring(0, UniversalChatWidget.LIMITS.MODEL_NAME_LENGTH);
+    return this.validate(model, {
+      type: 'string',
+      pattern: /^[a-zA-Z0-9\-_.]+$/,
+      maxLength: UniversalChatWidget.LIMITS.MODEL_NAME_LENGTH,
+      errorPrefix: 'Chat Widget: Model name'
+    });
   }
 
   /**
@@ -1002,6 +1054,45 @@ class UniversalChatWidget {
   }
 
   /**
+   * Generates CSS custom properties (variables) for theming
+   * @returns {string} CSS :root block with all theme variables
+   */
+  generateCSSVariables() {
+    return `
+      :root {
+        /* Color variables */
+        --chat-title-bg: ${this.options.titleBackgroundColor};
+        --chat-title-fg: ${this.options.titleFontColor};
+        --chat-assistant-color: ${this.options.assistantColor};
+        --chat-assistant-fg: ${this.options.assistantFontColor};
+        --chat-user-color: ${this.options.userColor};
+        --chat-user-fg: ${this.options.userFontColor};
+        --chat-background: ${this.options.chatBackground};
+        --chat-stamp-color: ${this.options.stampColor};
+        --chat-code-bg: ${this.options.codeBackgroundColor};
+        --chat-code-fg: ${this.options.codeTextColor};
+        --chat-border: ${this.options.borderColor};
+        --chat-button-icon: ${this.options.buttonIconColor};
+        --chat-scrollbar: ${this.options.scrollbarColor};
+        --chat-input-fg: ${this.options.inputTextColor};
+
+        /* Opacity variables */
+        --assistant-opacity: ${this.options.assistantMessageOpacity};
+        --user-opacity: ${this.options.userMessageOpacity};
+        --code-opacity: ${this.options.codeOpacity};
+        --input-opacity: ${this.options.inputAreaOpacity};
+
+        /* Size variables */
+        --button-size: ${this.options.buttonSize}px;
+        --window-width: ${this.options.windowWidth}px;
+        --window-height: ${this.options.windowHeight}px;
+        --scrollbar-width: ${UniversalChatWidget.SIZES.SCROLLBAR_WIDTH}px;
+        --input-max-height: ${UniversalChatWidget.SIZES.INPUT_MAX_HEIGHT}px;
+      }
+    `;
+  }
+
+  /**
    * Injects CSS styles for the chat widget into the document head
    * Only injects once (checks for existing styles), applies all theme colors and responsive behavior
    * @returns {void}
@@ -1009,13 +1100,10 @@ class UniversalChatWidget {
   injectStyles() {
     if (document.getElementById("universal-chat-styles")) return;
 
-    // Use solid color only - no gradients
-    const backgroundStyle = this.options.userColor;
-    const headerBackgroundStyle = this.options.titleBackgroundColor;
-
     const styles = document.createElement("style");
     styles.id = "universal-chat-styles";
     styles.textContent = `
+      ${this.generateCSSVariables()}
 
       /* Import Google Fonts and KaTeX */
       @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap');
@@ -1027,10 +1115,10 @@ class UniversalChatWidget {
         position: fixed;
         ${this.options.position.includes("right") ? "right: 20px" : "left: 20px"};
         ${this.options.position.includes("bottom") ? "bottom: 20px" : "top: 20px"};
-        width: ${this.options.buttonSize}px;
-        height: ${this.options.buttonSize}px;
+        width: var(--button-size);
+        height: var(--button-size);
         border-radius: 2px;
-        background: ${this.options.assistantColor};
+        background: var(--chat-assistant-color);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         cursor: pointer;
         display: flex;
@@ -1039,26 +1127,26 @@ class UniversalChatWidget {
         transition: all 0.3s ease;
         z-index: 9998;
         border: none;
-        color: ${this.options.buttonIconColor};
+        color: var(--chat-button-icon);
         font-size: 28px;
       }
 
       /* Unified hover and focus styles for chat button */
       .universal-chat-button:hover,
       .universal-chat-button:focus {
-        background: ${this.options.stampColor};
+        background: var(--chat-stamp-color);
         transform: scale(1.1);
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
       }
 
       .universal-chat-button.chat-open {
         transform: rotate(90deg);
-        background: ${this.options.userColor};
+        background: var(--chat-user-color);
       }
 
       .universal-chat-button.chat-open:hover,
       .universal-chat-button.chat-open:focus {
-        background: ${this.options.stampColor};
+        background: var(--chat-stamp-color);
         transform: rotate(90deg) scale(1.1);
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
       }
@@ -1068,8 +1156,8 @@ class UniversalChatWidget {
         position: absolute;
         top: -5px;
         right: -5px;
-        background: ${this.options.assistantColor};
-        color: ${this.options.stampColor};
+        background: var(--chat-assistant-color);
+        color: var(--chat-stamp-color);
         border-radius: 2px;
         padding: 2px 6px;
         font-size: 12px;
@@ -1085,7 +1173,7 @@ class UniversalChatWidget {
         bottom: -8px;
         left: 50%;
         transform: translateX(-50%);
-        background: ${this.options.chatBackground};
+        background: var(--chat-background);
         padding: 4px 8px;
         border-radius: 2px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -1100,7 +1188,7 @@ class UniversalChatWidget {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: ${this.options.assistantFontColor};
+        background: var(--chat-assistant-fg);
         animation: typingDot 1.4s infinite;
       }
 
@@ -1117,13 +1205,13 @@ class UniversalChatWidget {
         position: absolute;
         bottom: -35px;
         ${this.options.position.includes("right") ? "right: 0" : "left: 0"};
-        background: ${this.options.chatBackground};
+        background: var(--chat-background);
         padding: 8px 12px;
         border-radius: 2px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         max-width: 250px;
         font-size: 14px;
-        color: ${this.options.assistantFontColor};
+        color: var(--chat-assistant-fg);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1134,11 +1222,11 @@ class UniversalChatWidget {
       .universal-chat-window {
         position: fixed;
         ${this.options.position.includes("right") ? "right: 20px" : "left: 20px"};
-        ${this.options.position.includes("bottom") ? `bottom: ${this.options.buttonSize + 40}px` : `top: ${this.options.buttonSize + 40}px`};
-        width: ${this.options.windowWidth}px;
-        height: ${this.options.windowHeight}px;
-        max-height: calc(100vh - ${this.options.buttonSize + 60}px);
-        background: ${this.options.chatBackground};
+        ${this.options.position.includes("bottom") ? `bottom: calc(var(--button-size) + 40px)` : `top: calc(var(--button-size) + 40px)`};
+        width: var(--window-width);
+        height: var(--window-height);
+        max-height: calc(100vh - var(--button-size) - 60px);
+        background: var(--chat-background);
         border-radius: 2px;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
         display: flex;
@@ -1160,8 +1248,8 @@ class UniversalChatWidget {
 
       /* Header */
       .chat-header {
-        background: ${headerBackgroundStyle};
-        color: ${this.options.titleFontColor};
+        background: var(--chat-title-bg);
+        color: var(--chat-title-fg);
         padding: 0.5rem 1.25rem;
         border-radius: 2px 2px 0 0;
         display: flex;
@@ -1173,7 +1261,7 @@ class UniversalChatWidget {
         margin: 0;
         font-size: 1.1rem;
         font-weight: 600;
-        color: ${this.options.titleFontColor};
+        color: var(--chat-title-fg);
       }
 
       .chat-header-actions {
@@ -1184,7 +1272,7 @@ class UniversalChatWidget {
       .chat-header-btn {
         background: transparent;
         border: none;
-        color: ${this.options.titleFontColor};
+        color: var(--chat-title-fg);
         width: 44px;
         height: 44px;
         cursor: pointer;
@@ -1198,7 +1286,7 @@ class UniversalChatWidget {
       /* Unified hover and focus styles for header buttons */
       .chat-header-btn:hover,
       .chat-header-btn:focus {
-        color: ${this.options.stampColor} !important;
+        color: var(--chat-stamp-color) !important;
         transform: scale(1.1);
         opacity: 1 !important;
         outline: none !important;
@@ -1209,17 +1297,17 @@ class UniversalChatWidget {
         flex: 1;
         overflow-y: auto;
         padding: 1rem;
-        padding-bottom: ${UniversalChatWidget.SIZES.INPUT_MAX_HEIGHT}px;
-        background: ${this.options.chatBackground};
+        padding-bottom: var(--input-max-height);
+        background: var(--chat-background);
         scroll-behavior: smooth;
       }
 
       .chat-messages::-webkit-scrollbar {
-        width: ${UniversalChatWidget.SIZES.SCROLLBAR_WIDTH}px;
+        width: var(--scrollbar-width);
       }
 
       .chat-messages::-webkit-scrollbar-thumb {
-        background: ${this.options.scrollbarColor};
+        background: var(--chat-scrollbar);
         border-radius: 2px;
       }
 
@@ -1248,7 +1336,7 @@ class UniversalChatWidget {
       .message-bubble h3 {
         margin: 1rem 0 0.5rem 0;
         font-weight: 600;
-        color: ${this.options.assistantFontColor};
+        color: var(--chat-assistant-fg);
       }
 
       .message-bubble h1 { font-size: 1.4em; }
@@ -1262,32 +1350,32 @@ class UniversalChatWidget {
       }
 
       .message.user .message-bubble {
-        background: color-mix(in srgb, ${this.options.userColor}, transparent ${(1 - this.options.userMessageOpacity) * 100}%);
-        border: 1px solid ${this.options.borderColor};
-        color: ${this.options.userFontColor};
+        background: ${this.getColorWithOpacity('var(--chat-user-color)', this.options.userMessageOpacity)};
+        border: 1px solid var(--chat-border);
+        color: var(--chat-user-fg);
         border-radius: 2px;
         text-align: left;
       }
 
 
       .message.assistant .message-bubble {
-        background: color-mix(in srgb, ${this.options.assistantColor}, transparent ${(1 - this.options.assistantMessageOpacity) * 100}%);
-        border: 1px solid ${this.options.borderColor};
+        background: ${this.getColorWithOpacity('var(--chat-assistant-color)', this.options.assistantMessageOpacity)};
+        border: 1px solid var(--chat-border);
         border-radius: 2px;
-        color: ${this.options.assistantFontColor};
+        color: var(--chat-assistant-fg);
       }
 
       .message-time {
         font-size: 0.7rem;
-        color: ${this.options.stampColor};
+        color: var(--chat-stamp-color);
         margin-top: 0.25rem;
       }
 
       .typing-indicator {
         display: inline-block;
         padding: 0.75rem 1rem;
-        background: color-mix(in srgb, ${this.options.assistantColor}, transparent ${(1 - this.options.assistantMessageOpacity) * 100}%);
-        border: 1px solid ${this.options.borderColor};
+        background: ${this.getColorWithOpacity('var(--chat-assistant-color)', this.options.assistantMessageOpacity)};
+        border: 1px solid var(--chat-border);
         border-radius: 2px;
       }
 
@@ -1296,7 +1384,7 @@ class UniversalChatWidget {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: ${this.options.assistantFontColor};
+        background: var(--chat-assistant-fg);
         margin: 0 2px;
         animation: typingBounce 1.4s infinite;
       }
@@ -1323,7 +1411,7 @@ class UniversalChatWidget {
 
       .chat-input-container {
         display: flex;
-        border: 1px solid ${this.options.borderColor};
+        border: 1px solid var(--chat-border);
         border-radius: 2px;
         overflow: hidden;
         background: transparent;
@@ -1337,17 +1425,17 @@ class UniversalChatWidget {
         resize: none;
         font-family: inherit;
         font-size: 0.95rem;
-        max-height: ${UniversalChatWidget.SIZES.INPUT_MAX_HEIGHT}px;
+        max-height: var(--input-max-height);
         background: transparent;
-        color: ${this.options.inputTextColor};
+        color: var(--chat-input-fg);
       }
 
       .chat-send-btn {
         padding: 0.75rem 1rem;
-        background: ${backgroundStyle};
-        color: ${this.options.userFontColor};
+        background: var(--chat-user-color);
+        color: var(--chat-user-fg);
         border: none;
-        border-left: 1px solid ${this.options.borderColor};
+        border-left: 1px solid var(--chat-border);
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -1362,7 +1450,7 @@ class UniversalChatWidget {
       /* Unified hover and focus styles for send button */
       .chat-send-btn:hover:not(:disabled):not([aria-disabled="true"]),
       .chat-send-btn:focus:not(:disabled):not([aria-disabled="true"]) {
-        background: ${this.options.stampColor} !important;
+        background: var(--chat-stamp-color) !important;
         transform: scale(1.05);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         outline: none !important;
@@ -1381,13 +1469,13 @@ class UniversalChatWidget {
       .chat-send-btn[aria-disabled="true"]:focus {
         transform: none !important;
         box-shadow: none !important;
-        background: ${backgroundStyle} !important;
+        background: var(--chat-user-color) !important;
       }
 
       /* Model info badge */
       .model-info {
         font-size: 0.7rem;
-        color: ${this.options.stampColor};
+        color: var(--chat-stamp-color);
         text-align: center;
         padding: 0.25rem;
         background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
@@ -1399,34 +1487,34 @@ class UniversalChatWidget {
       @media (hover: none) and (pointer: coarse) {
         /* Chat button - apply desktop hover styles on tap */
         .universal-chat-button:active {
-          background: ${this.options.stampColor};
+          background: var(--chat-stamp-color);
           transform: scale(1.1);
           box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
         }
 
         .universal-chat-button.chat-open:active {
-          background: ${this.options.stampColor};
+          background: var(--chat-stamp-color);
           transform: rotate(90deg) scale(1.1);
           box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
         }
 
         /* Header buttons */
         .chat-header-btn:active {
-          color: ${this.options.stampColor} !important;
+          color: var(--chat-stamp-color) !important;
           transform: scale(1.1);
           opacity: 1 !important;
         }
 
         /* Send button */
         .chat-send-btn:active:not(:disabled):not([aria-disabled="true"]) {
-          background: ${this.options.stampColor} !important;
+          background: var(--chat-stamp-color) !important;
           transform: scale(1.05);
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         /* Code copy buttons */
         .code-copy-btn:active {
-          background: ${this.options.stampColor};
+          background: var(--chat-stamp-color);
           transform: scale(1.05);
         }
 
@@ -1437,14 +1525,14 @@ class UniversalChatWidget {
 
         /* Citation links */
         .citation-link:active {
-          background: ${this.options.stampColor};
-          color: ${this.options.titleFontColor};
+          background: var(--chat-stamp-color);
+          color: var(--chat-title-fg);
           transform: scale(1.05);
         }
 
         /* Retry button */
         .retry-btn:active:not(:disabled) {
-          background: ${this.options.stampColor};
+          background: var(--chat-stamp-color);
           transform: scale(1.05);
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
@@ -1494,7 +1582,7 @@ class UniversalChatWidget {
 
         .chat-input-container {
           border-radius: 2px;
-          border: 1px solid ${this.options.borderColor};
+          border: 1px solid var(--chat-border);
         }
 
         .chat-input {
@@ -1509,19 +1597,19 @@ class UniversalChatWidget {
         border-radius: 2px;
         font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         font-size: 0.9em;
-        color: ${this.options.codeTextColor};
+        color: var(--chat-code-fg);
         word-break: break-all;
         white-space: pre-wrap;
       }
 
       .message.user .message-bubble code {
         background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
-        color: ${this.options.codeTextColor};
+        color: var(--chat-code-fg);
       }
 
       .message-bubble pre {
         background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
-        color: ${this.options.codeTextColor};
+        color: var(--chat-code-fg);
         padding: 0.5rem;
         margin-top: 0.1rem;
         border-radius: 2px;
@@ -1532,7 +1620,7 @@ class UniversalChatWidget {
         word-break: break-word;
         position: relative;
         font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        border: 1px solid ${this.options.borderColor};
+        border: 1px solid var(--chat-border);
       }
 
       .message-bubble pre code {
@@ -1548,8 +1636,8 @@ class UniversalChatWidget {
         position: absolute;
         top: 0.5rem;
         right: 0.5rem;
-        background: ${this.options.borderColor};
-        color: ${this.options.titleFontColor};
+        background: var(--chat-border);
+        color: var(--chat-title-fg);
         border: none;
         border-radius: 4px;
         padding: 0.25rem 0.5rem;
@@ -1563,7 +1651,7 @@ class UniversalChatWidget {
       /* Unified hover and focus styles for code copy button */
       .code-copy-btn:hover,
       .code-copy-btn:focus {
-        background: ${this.options.stampColor};
+        background: var(--chat-stamp-color);
         transform: scale(1.05);
         outline: none;
       }
@@ -1573,8 +1661,8 @@ class UniversalChatWidget {
       }
 
       .code-copy-btn.copied {
-        background: ${this.options.assistantColor};
-        color: ${this.options.assistantFontColor};
+        background: var(--chat-assistant-color);
+        color: var(--chat-assistant-fg);
       }
 
       /* KaTeX styling */
@@ -1588,8 +1676,8 @@ class UniversalChatWidget {
       }
 
       .katex-error {
-        color: ${this.options.stampColor};
-        border: 1px solid ${this.options.stampColor};
+        color: var(--chat-stamp-color);
+        border: 1px solid var(--chat-stamp-color);
         padding: 0.25rem;
         border-radius: 3px;
         background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
@@ -1597,7 +1685,7 @@ class UniversalChatWidget {
 
       /* Citation styling */
       .citation-link {
-        color: ${this.options.codeTextColor};
+        color: var(--chat-code-fg);
         cursor: pointer;
         text-decoration: none;
         font-weight: 500;
@@ -1610,8 +1698,8 @@ class UniversalChatWidget {
       /* Unified hover and focus styles for citation links */
       .citation-link:hover,
       .citation-link:focus {
-        background: ${this.options.stampColor};
-        color: ${this.options.titleFontColor};
+        background: var(--chat-stamp-color);
+        color: var(--chat-title-fg);
         transform: scale(1.05);
         outline: none;
       }
@@ -1619,14 +1707,14 @@ class UniversalChatWidget {
       .references-section {
         margin-top: 1rem;
         padding-top: 1rem;
-        border-top: 1px solid ${this.options.borderColor};
+        border-top: 1px solid var(--chat-border);
       }
 
       .references-section h4 {
         margin: 0 0 1rem 0;
         font-size: 1rem;
         font-weight: 600;
-        color: ${this.options.assistantFontColor};
+        color: var(--chat-assistant-fg);
       }
 
       .references-list {
@@ -1637,7 +1725,7 @@ class UniversalChatWidget {
 
       .reference-item {
         margin-bottom: 0.5rem;
-        color: ${this.options.assistantFontColor};
+        color: var(--chat-assistant-fg);
         transition: background-color 0.3s ease;
         text-align: justify;
       }
@@ -1646,7 +1734,7 @@ class UniversalChatWidget {
         background: ${this.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
         padding: 0.5rem;
         border-radius: 2px;
-        border-left: 2px solid ${this.options.userColor};
+        border-left: 2px solid var(--chat-user-color);
       }
 
       /* Animations */
@@ -1681,26 +1769,24 @@ class UniversalChatWidget {
       /* Text selection styling for consistency across devices */
       .universal-chat-window ::selection {
         background: ${this.hexToRgba(this.options.userColor, 0.3)};
-        color: ${this.options.assistantFontColor};
+        color: var(--chat-assistant-fg);
       }
 
       .universal-chat-window ::-moz-selection {
         background: ${this.hexToRgba(this.options.userColor, 0.3)};
-        color: ${this.options.assistantFontColor};
+        color: var(--chat-assistant-fg);
       }
 
-      /* Input field focus style - red blinking cursor, no border */
+      /* Input field focus style - custom caret color, no border */
       .chat-input:focus {
         outline: none !important;
-        caret-color: ${this.options.stampColor};
+        caret-color: var(--chat-stamp-color);
       }
 
       /* Remove the container focus style as well */
       .chat-input-container:focus-within {
         box-shadow: none !important;
       }
-
-      /* Fallback removed - we now use :focus directly for all elements */
 
       /* Error message styles */
       .message.error {
@@ -1710,8 +1796,8 @@ class UniversalChatWidget {
 
       .message.error .message-bubble {
         background: ${this.hexToRgba(this.options.stampColor, 0.1)};
-        border: 1px solid ${this.options.stampColor};
-        color: ${this.options.assistantFontColor};
+        border: 1px solid var(--chat-stamp-color);
+        color: var(--chat-assistant-fg);
         padding: 1rem;
         max-width: 100%;
       }
@@ -1719,9 +1805,9 @@ class UniversalChatWidget {
       .retry-btn {
         margin-top: 0.75rem;
         padding: 0.5rem 1rem;
-        background: ${this.options.userColor};
-        color: ${this.options.userFontColor};
-        border: 1px solid ${this.options.borderColor};
+        background: var(--chat-user-color);
+        color: var(--chat-user-fg);
+        border: 1px solid var(--chat-border);
         border-radius: 2px;
         cursor: pointer;
         font-size: 0.9rem;
@@ -1735,7 +1821,7 @@ class UniversalChatWidget {
       /* Unified hover and focus styles for retry button */
       .retry-btn:hover:not(:disabled),
       .retry-btn:focus:not(:disabled) {
-        background: ${this.options.stampColor};
+        background: var(--chat-stamp-color);
         transform: scale(1.05);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         outline: none;

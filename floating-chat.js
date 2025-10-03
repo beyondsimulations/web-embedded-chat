@@ -1395,6 +1395,61 @@ class UniversalChatWidget {
         border-radius: 2px;
       }
 
+      /* Touch device interactions - match desktop hover appearance */
+      @media (hover: none) and (pointer: coarse) {
+        /* Chat button - apply desktop hover styles on tap */
+        .universal-chat-button:active {
+          background: ${this.options.stampColor};
+          transform: scale(1.1);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .universal-chat-button.chat-open:active {
+          background: ${this.options.stampColor};
+          transform: rotate(90deg) scale(1.1);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Header buttons */
+        .chat-header-btn:active {
+          color: ${this.options.stampColor} !important;
+          transform: scale(1.1);
+          opacity: 1 !important;
+        }
+
+        /* Send button */
+        .chat-send-btn:active:not(:disabled):not([aria-disabled="true"]) {
+          background: ${this.options.stampColor} !important;
+          transform: scale(1.05);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Code copy buttons */
+        .code-copy-btn:active {
+          background: ${this.options.stampColor};
+          transform: scale(1.05);
+        }
+
+        /* Make code copy buttons always visible on touch devices */
+        .message-bubble pre .code-copy-btn {
+          opacity: 1;
+        }
+
+        /* Citation links */
+        .citation-link:active {
+          background: ${this.options.stampColor};
+          color: ${this.options.titleFontColor};
+          transform: scale(1.05);
+        }
+
+        /* Retry button */
+        .retry-btn:active:not(:disabled) {
+          background: ${this.options.stampColor};
+          transform: scale(1.05);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+      }
+
       /* Mobile Fullscreen */
       @media (max-width: ${UniversalChatWidget.SIZES.MOBILE_BREAKPOINT}px) {
         .universal-chat-window {
@@ -1621,6 +1676,17 @@ class UniversalChatWidget {
         clip: rect(0, 0, 0, 0);
         white-space: nowrap;
         border-width: 0;
+      }
+
+      /* Text selection styling for consistency across devices */
+      .universal-chat-window ::selection {
+        background: ${this.hexToRgba(this.options.userColor, 0.3)};
+        color: ${this.options.assistantFontColor};
+      }
+
+      .universal-chat-window ::-moz-selection {
+        background: ${this.hexToRgba(this.options.userColor, 0.3)};
+        color: ${this.options.assistantFontColor};
       }
 
       /* Input field focus style - red blinking cursor, no border */

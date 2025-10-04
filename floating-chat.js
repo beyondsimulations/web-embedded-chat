@@ -6,39 +6,40 @@
 
 /**
  * @typedef {Object} ChatOptions
- * @property {string} [title="Course Assistant"] - Chat window title
- * @property {string} [welcomeMessage="Hello! How can I help you today?"] - Initial greeting message
- * @property {string} [placeholder="Type your question..."] - Input placeholder text
- * @property {string} [position="bottom-right"] - Widget position (bottom-right, bottom-left, top-right, top-left)
- * @property {string} apiEndpoint - API endpoint URL for chat requests
- * @property {string} [model="gpt-3.5-turbo"] - AI model name
- * @property {string} [titleBackgroundColor="#2c3532"] - Header background color
- * @property {string} [titleFontColor="#ffffff"] - Header text color
- * @property {string} [assistantColor="#fdcd9a"] - Assistant message bubble color
- * @property {string} [assistantFontColor="#2c3532"] - Assistant text color
- * @property {number} [assistantMessageOpacity=1.0] - Assistant bubble opacity (0.0-1.0)
- * @property {string} [userColor="#99bfbb"] - User message bubble color
- * @property {string} [userFontColor="#2c3532"] - User text color
- * @property {number} [userMessageOpacity=1.0] - User bubble opacity (0.0-1.0)
- * @property {string} [chatBackground="#ffffff"] - Chat window background color
- * @property {string} [stampColor="#df7d7d"] - Timestamp and badge color
- * @property {string} [codeBackgroundColor="#f3f4f6"] - Code block background color
- * @property {number} [codeOpacity=0.85] - Code block opacity (0.0-1.0)
- * @property {string} [codeTextColor="#2c3532"] - Code text color
- * @property {string} [borderColor="#2c3532"] - Border color
- * @property {string} [buttonIconColor="#ffffff"] - Button icon color
- * @property {string} [scrollbarColor="#d1d5db"] - Scrollbar color
- * @property {string} [inputTextColor="#1f2937"] - Input text color
- * @property {number} [inputAreaOpacity=0.95] - Input area opacity (0.0-1.0)
- * @property {boolean} [startOpen=false] - Auto-open chat on load
- * @property {number} [buttonSize=60] - Chat button size in pixels
- * @property {number} [windowWidth=450] - Chat window width in pixels
- * @property {number} [windowHeight=600] - Chat window height in pixels
- * @property {boolean} [showModelInfo=false] - Display model name in UI
- * @property {number} [maxHistoryTokens=4000] - Token budget for conversation history
- * @property {number} [alwaysKeepRecentMessages=10] - Recent messages to keep uncompressed
- * @property {number} [maxHistoryMessages=100] - Maximum stored messages
- * @property {boolean} [debug=false] - Enable debug logging
+ * Defaults are defined in _normalizeOptions().
+ * @property {string} [title] - Chat window title
+ * @property {string} [welcomeMessage] - Initial greeting message
+ * @property {string} [placeholder] - Input placeholder text
+ * @property {string} [position] - Widget position: "bottom-right" | "bottom-left" | "top-right" | "top-left"
+ * @property {string} apiEndpoint - API endpoint URL for chat requests (required)
+ * @property {string} [model] - AI model name
+ * @property {string} [titleBackgroundColor] - Header background color
+ * @property {string} [titleFontColor] - Header text color
+ * @property {string} [assistantColor] - Assistant message bubble color
+ * @property {string} [assistantFontColor] - Assistant text color
+ * @property {number} [assistantMessageOpacity] - Assistant bubble opacity (0.0–1.0)
+ * @property {string} [userColor] - User message bubble color
+ * @property {string} [userFontColor] - User text color
+ * @property {number} [userMessageOpacity] - User bubble opacity (0.0–1.0)
+ * @property {string} [chatBackground] - Chat window background color
+ * @property {string} [stampColor] - Timestamp and badge color
+ * @property {string} [codeBackgroundColor] - Code block background color
+ * @property {number} [codeOpacity] - Code block opacity (0.0–1.0)
+ * @property {string} [codeTextColor] - Code text color
+ * @property {string} [borderColor] - Border color
+ * @property {string} [buttonIconColor] - Button icon color
+ * @property {string} [scrollbarColor] - Scrollbar color
+ * @property {string} [inputTextColor] - Input text color
+ * @property {number} [inputAreaOpacity] - Input area opacity (0.0–1.0)
+ * @property {boolean} [startOpen] - Auto-open chat on load
+ * @property {number} [buttonSize] - Chat button size in pixels
+ * @property {number} [windowWidth] - Chat window width in pixels
+ * @property {number} [windowHeight] - Chat window height in pixels
+ * @property {boolean} [showModelInfo] - Display model name in UI
+ * @property {number} [maxHistoryTokens] - Token budget for conversation history
+ * @property {number} [alwaysKeepRecentMessages] - Recent messages to keep uncompressed
+ * @property {number} [maxHistoryMessages] - Maximum stored messages
+ * @property {boolean} [debug] - Enable debug logging
  */
 
 /**
@@ -2552,24 +2553,30 @@ class UniversalChatWidget {
       apiEndpoint:
         ChatValidators.validateApiEndpoint(options.apiEndpoint) ||
         "https://your-worker.workers.dev",
-      model: ChatValidators.validateModel(options.model) || "gpt-3.5-turbo",
-      titleBackgroundColor: options.titleBackgroundColor || "#2c3532",
-      titleFontColor: options.titleFontColor || "#ffffff",
-      assistantColor: options.assistantColor || "#fdcd9a",
-      assistantFontColor: options.assistantFontColor || "#2c3532",
-      assistantMessageOpacity: options.assistantMessageOpacity || 1.0,
-      userColor: options.userColor || "#99bfbb",
-      userFontColor: options.userFontColor || "#2c3532",
-      userMessageOpacity: options.userMessageOpacity || 1.0,
+      model:
+        ChatValidators.validateModel(options.model) || "mistral-medium-latest",
+      titleBackgroundColor: options.titleBackgroundColor || "FDF8ED",
+      titleFontColor: options.titleFontColor || "363D45",
+
+      assistantColor: options.assistantColor || "FCCF9C",
+      assistantFontColor: options.assistantFontColor || "363D45",
+      assistantMessageOpacity: options.assistantMessageOpacity || 0.9,
+
+      userColor: options.userColor || "#A7C7C6",
+      userFontColor: options.userFontColor || "363D45",
+      userMessageOpacity: options.userMessageOpacity || 0.9,
+
       chatBackground: options.chatBackground || "#ffffff",
-      stampColor: options.stampColor || "#df7d7d",
-      codeBackgroundColor: options.codeBackgroundColor || "#f3f4f6",
-      codeOpacity: options.codeOpacity || 0.85,
-      codeTextColor: options.codeTextColor || "#2c3532",
-      borderColor: options.borderColor || "#2c3532",
-      buttonIconColor: options.buttonIconColor || "#ffffff",
-      scrollbarColor: options.scrollbarColor || "#d1d5db",
-      inputTextColor: options.inputTextColor || "#1f2937",
+      stampColor: options.stampColor || "DB6B6B",
+      codeBackgroundColor: options.codeBackgroundColor || "FFEEE2",
+      codeOpacity: options.codeOpacity || 0.9,
+      codeTextColor: options.codeTextColor || "537E8F",
+
+      borderColor: options.borderColor || "363D45",
+      buttonIconColor: options.buttonIconColor || "363D45",
+      scrollbarColor: options.scrollbarColor || "FDF8ED",
+      inputTextColor: options.inputTextColor || "363D45",
+
       inputAreaOpacity: options.inputAreaOpacity || 0.95,
       startOpen: options.startOpen || false,
       buttonSize: options.buttonSize || SIZES.BUTTON_SIZE,

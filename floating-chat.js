@@ -1,5 +1,4 @@
 // Universal Chat Widget - Works with any OpenAI-compatible API
-// Refactored version with modular architecture in a single file
 
 // ============================================================================
 // TYPE DEFINITIONS & CONSTANTS
@@ -61,46 +60,46 @@
  * Timing constants for animations and delays (in milliseconds)
  */
 const TIMINGS = {
-  FOCUS_DELAY: 100,              // Delay before focusing input
-  DEBOUNCE_INPUT: 100,           // Input debounce for auto-resize
-  IOS_KEYBOARD_DELAY: 300,       // Delay for iOS keyboard animations
-  START_OPEN_DELAY: 1000,        // Delay before auto-opening chat
-  HIGHLIGHT_DURATION: 2000,      // Duration for citation highlight
-  COPY_SUCCESS_DURATION: 2000,   // Duration for "copied" indicator
-  PREVIEW_TIMEOUT: 5000,         // Message preview display time
-  PULSE_ANIMATION: 1500,         // Pulse animation duration
+  FOCUS_DELAY: 100, // Delay before focusing input
+  DEBOUNCE_INPUT: 100, // Input debounce for auto-resize
+  IOS_KEYBOARD_DELAY: 300, // Delay for iOS keyboard animations
+  START_OPEN_DELAY: 1000, // Delay before auto-opening chat
+  HIGHLIGHT_DURATION: 2000, // Duration for citation highlight
+  COPY_SUCCESS_DURATION: 2000, // Duration for "copied" indicator
+  PREVIEW_TIMEOUT: 5000, // Message preview display time
+  PULSE_ANIMATION: 1500, // Pulse animation duration
 };
 
 /**
  * Size constants for UI elements (in pixels)
  */
 const SIZES = {
-  BUTTON_SIZE: 60,               // Default chat button size (px)
-  WINDOW_WIDTH: 450,             // Default window width (px)
-  WINDOW_HEIGHT: 600,            // Default window height (px)
-  MOBILE_BREAKPOINT: 768,        // Mobile/desktop breakpoint (px)
-  MOBILE_PADDING_BOTTOM: 180,    // Mobile keyboard padding (px)
-  SCROLLBAR_WIDTH: 6,            // Scrollbar width (px)
-  INPUT_MAX_HEIGHT: 100,         // Max input field height (px)
+  BUTTON_SIZE: 60, // Default chat button size (px)
+  WINDOW_WIDTH: 450, // Default window width (px)
+  WINDOW_HEIGHT: 600, // Default window height (px)
+  MOBILE_BREAKPOINT: 768, // Mobile/desktop breakpoint (px)
+  MOBILE_PADDING_BOTTOM: 180, // Mobile keyboard padding (px)
+  SCROLLBAR_WIDTH: 6, // Scrollbar width (px)
+  INPUT_MAX_HEIGHT: 100, // Max input field height (px)
 };
 
 /**
  * Limit constants for messages, history, and content lengths
  */
 const LIMITS = {
-  MAX_MESSAGE_LENGTH: 2000,      // Max characters per message
-  MAX_HISTORY_MESSAGES: 100,     // Hard limit on stored messages
-  MAX_HISTORY_TOKENS: 4000,      // Token budget for API context
-  ALWAYS_KEEP_RECENT: 10,        // Recent messages never compressed
-  SOURCE_NAME_LENGTH: 500,       // Max source name length
-  SOURCE_DESC_LENGTH: 1000,      // Max source description length
-  SNIPPET_LENGTH: 200,           // Citation snippet length
-  COMPRESSED_MSG_LENGTH: 200,    // Compressed message length
-  USER_MSG_LENGTH: 500,          // Compressed user message length
-  MAX_HEADINGS_LENGTH: 100,      // Max heading string length
-  MIN_CITATION_LENGTH: 15,       // Min citation text length
-  MODEL_NAME_LENGTH: 50,         // Max model name length
-  CHARS_PER_TOKEN: 4,            // Approximate chars per token
+  MAX_MESSAGE_LENGTH: 2000, // Max characters per message
+  MAX_HISTORY_MESSAGES: 100, // Hard limit on stored messages
+  MAX_HISTORY_TOKENS: 4000, // Token budget for API context
+  ALWAYS_KEEP_RECENT: 10, // Recent messages never compressed
+  SOURCE_NAME_LENGTH: 500, // Max source name length
+  SOURCE_DESC_LENGTH: 1000, // Max source description length
+  SNIPPET_LENGTH: 200, // Citation snippet length
+  COMPRESSED_MSG_LENGTH: 200, // Compressed message length
+  USER_MSG_LENGTH: 500, // Compressed user message length
+  MAX_HEADINGS_LENGTH: 100, // Max heading string length
+  MIN_CITATION_LENGTH: 15, // Min citation text length
+  MODEL_NAME_LENGTH: 50, // Max model name length
+  CHARS_PER_TOKEN: 4, // Approximate chars per token
 };
 
 // ============================================================================
@@ -122,12 +121,12 @@ class EventBus {
 
   emit(event, data) {
     if (!this._events[event]) return;
-    this._events[event].forEach(handler => handler(data));
+    this._events[event].forEach((handler) => handler(data));
   }
 
   off(event, handler) {
     if (!this._events[event]) return;
-    this._events[event] = this._events[event].filter(h => h !== handler);
+    this._events[event] = this._events[event].filter((h) => h !== handler);
   }
 }
 
@@ -142,13 +141,13 @@ class ChatValidators {
     if (!endpoint) return null;
     try {
       const url = new URL(endpoint);
-      if (!['https:', 'http:'].includes(url.protocol)) {
-        console.warn('Chat Widget: API endpoint - Protocol not allowed');
+      if (!["https:", "http:"].includes(url.protocol)) {
+        console.warn("Chat Widget: API endpoint - Protocol not allowed");
         return null;
       }
       return endpoint;
     } catch (e) {
-      console.warn('Chat Widget: API endpoint - Invalid URL format');
+      console.warn("Chat Widget: API endpoint - Invalid URL format");
       return null;
     }
   }
@@ -157,12 +156,12 @@ class ChatValidators {
    * Validates and sanitizes AI model name
    */
   static validateModel(model) {
-    if (!model || typeof model !== 'string') {
-      console.warn('Chat Widget: Model name - Expected string');
+    if (!model || typeof model !== "string") {
+      console.warn("Chat Widget: Model name - Expected string");
       return null;
     }
     if (!/^[a-zA-Z0-9\-_.]+$/.test(model)) {
-      console.warn('Chat Widget: Model name - Pattern validation failed');
+      console.warn("Chat Widget: Model name - Pattern validation failed");
       return null;
     }
     return model.substring(0, LIMITS.MODEL_NAME_LENGTH);
@@ -176,27 +175,43 @@ class ChatValidators {
 
     return sources
       .filter((sourceData) => {
-        if (!sourceData || typeof sourceData !== 'object') return false;
+        if (!sourceData || typeof sourceData !== "object") return false;
 
-        if (sourceData.source && typeof sourceData.source === 'object') {
-          if (sourceData.source.name && typeof sourceData.source.name !== 'string') return false;
-          if (sourceData.source.description && typeof sourceData.source.description !== 'string') return false;
+        if (sourceData.source && typeof sourceData.source === "object") {
+          if (
+            sourceData.source.name &&
+            typeof sourceData.source.name !== "string"
+          )
+            return false;
+          if (
+            sourceData.source.description &&
+            typeof sourceData.source.description !== "string"
+          )
+            return false;
         }
 
-        if (sourceData.document && typeof sourceData.document !== 'object') return false;
-        if (sourceData.metadata && typeof sourceData.metadata !== 'object') return false;
+        if (sourceData.document && typeof sourceData.document !== "object")
+          return false;
+        if (sourceData.metadata && typeof sourceData.metadata !== "object")
+          return false;
 
         return true;
       })
       .map((sourceData) => {
         const sanitized = {};
 
-        if (sourceData.source && typeof sourceData.source === 'object') {
+        if (sourceData.source && typeof sourceData.source === "object") {
           sanitized.source = {
-            name: String(sourceData.source.name || '').substring(0, LIMITS.SOURCE_NAME_LENGTH),
+            name: String(sourceData.source.name || "").substring(
+              0,
+              LIMITS.SOURCE_NAME_LENGTH,
+            ),
             description: sourceData.source.description
-              ? String(sourceData.source.description).substring(0, LIMITS.SOURCE_DESC_LENGTH)
-              : '',
+              ? String(sourceData.source.description).substring(
+                  0,
+                  LIMITS.SOURCE_DESC_LENGTH,
+                )
+              : "",
           };
         }
 
@@ -216,13 +231,13 @@ class ChatValidators {
    * Escapes HTML special characters
    */
   static escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return '';
+    if (typeof unsafe !== "string") return "";
     return unsafe
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 }
 
@@ -290,7 +305,7 @@ class ChatState {
   }
 
   _notifyListeners(oldState, newState) {
-    this._listeners.forEach(listener => listener(newState, oldState));
+    this._listeners.forEach((listener) => listener(newState, oldState));
   }
 
   /**
@@ -304,17 +319,17 @@ class ChatState {
     };
 
     if (this._options.debug) {
-      console.log('Client saving state with traceId:', this._state.traceId);
+      console.log("Client saving state with traceId:", this._state.traceId);
     }
 
-    sessionStorage.setItem('universalChatState', JSON.stringify(stateToSave));
+    sessionStorage.setItem("universalChatState", JSON.stringify(stateToSave));
   }
 
   /**
    * Restores state from sessionStorage
    */
   restore() {
-    const saved = sessionStorage.getItem('universalChatState');
+    const saved = sessionStorage.getItem("universalChatState");
     if (saved) {
       const state = JSON.parse(saved);
       this.update({
@@ -324,7 +339,10 @@ class ChatState {
       });
 
       if (this._options.debug) {
-        console.log('Client restored traceId from sessionStorage:', this._state.traceId);
+        console.log(
+          "Client restored traceId from sessionStorage:",
+          this._state.traceId,
+        );
       }
 
       return true;
@@ -341,17 +359,18 @@ class ChatState {
 
     const recentCount = Math.min(
       this._options.alwaysKeepRecentMessages || LIMITS.ALWAYS_KEEP_RECENT,
-      history.length
+      history.length,
     );
     const recentMessages = history.slice(-recentCount);
     const olderMessages = history.slice(0, -recentCount);
 
     let tokenCount = recentMessages.reduce(
       (sum, msg) => sum + this._estimateTokens(msg.content),
-      0
+      0,
     );
 
-    const maxTokens = this._options.maxHistoryTokens || LIMITS.MAX_HISTORY_TOKENS;
+    const maxTokens =
+      this._options.maxHistoryTokens || LIMITS.MAX_HISTORY_TOKENS;
 
     if (tokenCount < maxTokens && olderMessages.length === 0) {
       return history;
@@ -373,7 +392,7 @@ class ChatState {
 
     if (this._options.debug) {
       console.log(
-        `History optimized: ${history.length} → ${optimized.length} messages (~${tokenCount} tokens)`
+        `History optimized: ${history.length} → ${optimized.length} messages (~${tokenCount} tokens)`,
       );
     }
 
@@ -384,11 +403,12 @@ class ChatState {
    * Trims history to maximum message count
    */
   trimHistory() {
-    const maxMessages = this._options.maxHistoryMessages || LIMITS.MAX_HISTORY_MESSAGES;
+    const maxMessages =
+      this._options.maxHistoryMessages || LIMITS.MAX_HISTORY_MESSAGES;
     if (this._state.history.length > maxMessages) {
       const removed = this._state.history.length - maxMessages;
       this.update({
-        history: this._state.history.slice(-maxMessages)
+        history: this._state.history.slice(-maxMessages),
       });
 
       if (this._options.debug) {
@@ -401,7 +421,7 @@ class ChatState {
    * Estimates token count for text
    */
   _estimateTokens(text) {
-    if (!text || typeof text !== 'string') return 0;
+    if (!text || typeof text !== "string") return 0;
     return Math.ceil(text.length / LIMITS.CHARS_PER_TOKEN);
   }
 
@@ -409,16 +429,16 @@ class ChatState {
    * Compresses a message for history
    */
   _compressMessage(message) {
-    if (message.role === 'user') {
+    if (message.role === "user") {
       return {
-        role: 'user',
+        role: "user",
         content: message.content.substring(0, LIMITS.USER_MSG_LENGTH),
       };
     } else {
       const content = message.content
-        .replace(/```[\s\S]*?```/g, '[code]')
-        .replace(/\[(\d+)\]/g, '')
-        .replace(/[#*_]/g, '')
+        .replace(/```[\s\S]*?```/g, "[code]")
+        .replace(/\[(\d+)\]/g, "")
+        .replace(/[#*_]/g, "")
         .trim();
 
       const firstSentence = content.match(/^[^.!?]+[.!?]/);
@@ -427,8 +447,8 @@ class ChatState {
         : content.substring(0, LIMITS.COMPRESSED_MSG_LENGTH);
 
       return {
-        role: 'assistant',
-        content: compressed + (compressed.length < content.length ? '...' : ''),
+        role: "assistant",
+        content: compressed + (compressed.length < content.length ? "..." : ""),
       };
     }
   }
@@ -453,12 +473,12 @@ class ChatAPI {
    */
   async sendMessage(message, history, traceId) {
     if (this.debug) {
-      console.log('Client sending traceId:', traceId);
+      console.log("Client sending traceId:", traceId);
     }
 
     const response = await fetch(this.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message,
         history,
@@ -470,7 +490,7 @@ class ChatAPI {
     const data = await response.json();
 
     if (!response.ok) {
-      throw this._createError(data.error || 'Request failed', response);
+      throw this._createError(data.error || "Request failed", response);
     }
 
     return this._extractResponseData(data);
@@ -487,7 +507,9 @@ class ChatAPI {
     if (data.source?.sources) {
       sources = Object.values(data.source.sources);
     } else if (data.sources) {
-      sources = Array.isArray(data.sources) ? data.sources : Object.values(data.sources);
+      sources = Array.isArray(data.sources)
+        ? data.sources
+        : Object.values(data.sources);
     } else if (data.context?.sources) {
       sources = Object.values(data.context.sources);
     } else if (data.choices?.[0]?.message?.sources) {
@@ -495,12 +517,12 @@ class ChatAPI {
     }
 
     if (this.debug) {
-      console.log('API Response:', data);
-      console.log('Sources found:', sources);
-      console.log('Content:', content);
+      console.log("API Response:", data);
+      console.log("Sources found:", sources);
+      console.log("Content:", content);
 
       const citationMatches = content.match(/\[(\d+)\]/g);
-      console.log('Citation numbers found in content:', citationMatches);
+      console.log("Citation numbers found in content:", citationMatches);
     }
 
     return {
@@ -525,50 +547,50 @@ class ChatAPI {
    * Detects and categorizes error type
    */
   _detectErrorType(error, response) {
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+    if (error.name === "TypeError" && error.message.includes("fetch")) {
       return {
-        type: 'network',
-        message: '🔌 Connection lost. Check your internet and try again.',
+        type: "network",
+        message: "🔌 Connection lost. Check your internet and try again.",
       };
     }
 
-    if (error.name === 'AbortError') {
+    if (error.name === "AbortError") {
       return {
-        type: 'timeout',
-        message: 'Request timed out. The server took too long to respond.',
+        type: "timeout",
+        message: "Request timed out. The server took too long to respond.",
       };
     }
 
     if (response) {
       if (response.status === 429) {
         return {
-          type: 'ratelimit',
-          message: 'Too many requests. Please wait a moment and try again.',
+          type: "ratelimit",
+          message: "Too many requests. Please wait a moment and try again.",
         };
       }
       if (response.status >= 500) {
         return {
-          type: 'server',
-          message: 'Server error. The service is temporarily unavailable.',
+          type: "server",
+          message: "Server error. The service is temporarily unavailable.",
         };
       }
       if (response.status === 401 || response.status === 403) {
         return {
-          type: 'auth',
-          message: 'Authentication error. Please check your API configuration.',
+          type: "auth",
+          message: "Authentication error. Please check your API configuration.",
         };
       }
       if (response.status >= 400) {
         return {
-          type: 'client',
-          message: '❌ Invalid request. Please try again.',
+          type: "client",
+          message: "❌ Invalid request. Please try again.",
         };
       }
     }
 
     return {
-      type: 'unknown',
-      message: 'Something went wrong. Please try again.',
+      type: "unknown",
+      message: "Something went wrong. Please try again.",
     };
   }
 }
@@ -591,21 +613,21 @@ class MessageRenderer {
    */
   formatMessage(content) {
     const escaped = content
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
     return escaped
-      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-      .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\n/g, '<br>')
-      .replace(/(<\/h[1-6]>)<br>/g, '$1')
-      .replace(/(<\/pre>)<br>/g, '$1');
+      .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
+      .replace(/^### (.*$)/gm, "<h3>$1</h3>")
+      .replace(/^## (.*$)/gm, "<h2>$1</h2>")
+      .replace(/^# (.*$)/gm, "<h1>$1</h1>")
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\n/g, "<br>")
+      .replace(/(<\/h[1-6]>)<br>/g, "$1")
+      .replace(/(<\/pre>)<br>/g, "$1");
   }
 
   /**
@@ -617,10 +639,10 @@ class MessageRenderer {
     if (window.renderMathInElement) {
       window.renderMathInElement(messageElement, {
         delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '$', right: '$', display: false },
-          { left: '\\[', right: '\\]', display: true },
-          { left: '\\(', right: '\\)', display: false },
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
         ],
         throwOnError: false,
         errorColor: this.options.stampColor,
@@ -632,7 +654,7 @@ class MessageRenderer {
    * Renders citations with clickable links
    */
   renderCitations(messageElement, sources = []) {
-    const messageBubble = messageElement.querySelector('.message-bubble');
+    const messageBubble = messageElement.querySelector(".message-bubble");
     if (!messageBubble) return;
 
     let content = messageBubble.innerHTML;
@@ -640,7 +662,7 @@ class MessageRenderer {
 
     const citationMatches = content.match(/\[(\d+)\]/g);
     const citationNumbers = citationMatches
-      ? citationMatches.map(match => parseInt(match.slice(1, -1)))
+      ? citationMatches.map((match) => parseInt(match.slice(1, -1)))
       : [];
 
     if (sources && sources.length > 0 && citationNumbers.length > 0) {
@@ -655,8 +677,8 @@ class MessageRenderer {
         const referenceText = match[2].trim();
 
         const cleanText = referenceText
-          .replace(/<[^>]*>/g, '')
-          .replace(/\s+/g, ' ')
+          .replace(/<[^>]*>/g, "")
+          .replace(/\s+/g, " ")
           .trim();
 
         if (cleanText.length > LIMITS.MIN_CITATION_LENGTH) {
@@ -689,15 +711,15 @@ class MessageRenderer {
    * Adds copy buttons to code blocks
    */
   addCopyButtonsToCodeBlocks(messageElement) {
-    const codeBlocks = messageElement.querySelectorAll('pre');
-    codeBlocks.forEach(codeBlock => {
-      const copyBtn = document.createElement('button');
-      copyBtn.className = 'code-copy-btn';
-      copyBtn.textContent = '⧉';
-      copyBtn.setAttribute('aria-label', 'Copy code');
+    const codeBlocks = messageElement.querySelectorAll("pre");
+    codeBlocks.forEach((codeBlock) => {
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "code-copy-btn";
+      copyBtn.textContent = "⧉";
+      copyBtn.setAttribute("aria-label", "Copy code");
 
-      copyBtn.addEventListener('click', async () => {
-        const codeContent = codeBlock.querySelector('code') || codeBlock;
+      copyBtn.addEventListener("click", async () => {
+        const codeContent = codeBlock.querySelector("code") || codeBlock;
         const textToCopy = codeContent.textContent;
 
         try {
@@ -724,11 +746,13 @@ class MessageRenderer {
         return;
       }
 
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js';
+      const script = document.createElement("script");
+      script.src =
+        "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js";
       script.onload = () => {
-        const autoRenderScript = document.createElement('script');
-        autoRenderScript.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js';
+        const autoRenderScript = document.createElement("script");
+        autoRenderScript.src =
+          "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js";
         autoRenderScript.onload = () => resolve();
         document.head.appendChild(autoRenderScript);
       };
@@ -742,17 +766,17 @@ class MessageRenderer {
    * Extracts citations from source data
    */
   _extractCitationsFromSources(sources, citationNumbers, citations) {
-    sources.forEach(sourceData => {
+    sources.forEach((sourceData) => {
       const source = sourceData.source;
       const document = sourceData.document;
       const metadata = sourceData.metadata;
 
       if (document) {
-        citationNumbers.forEach(citationNum => {
+        citationNumbers.forEach((citationNum) => {
           const docKey = citationNum.toString();
           const docContent = document[docKey] || document[citationNum - 1];
 
-          if (docContent && typeof docContent === 'string') {
+          if (docContent && typeof docContent === "string") {
             let referenceText = `<strong>${ChatValidators.escapeHtml(source.name)}</strong>`;
             if (source.description) {
               referenceText += ` - ${ChatValidators.escapeHtml(source.description)}`;
@@ -766,8 +790,8 @@ class MessageRenderer {
             // Add snippet
             const snippet = String(docContent)
               .substring(0, LIMITS.SNIPPET_LENGTH)
-              .replace(/[#*-]/g, '')
-              .replace(/\s+/g, ' ')
+              .replace(/[#*-]/g, "")
+              .replace(/\s+/g, " ")
               .trim();
 
             if (snippet) {
@@ -785,29 +809,34 @@ class MessageRenderer {
    * Formats metadata for display
    */
   _formatMetadata(metaInfo) {
-    let result = '';
+    let result = "";
 
-    if (metaInfo.headings && metaInfo.headings !== '[]') {
+    if (metaInfo.headings && metaInfo.headings !== "[]") {
       try {
         let headings = [];
 
-        if (typeof metaInfo.headings === 'string' &&
-            metaInfo.headings.startsWith('[') &&
-            metaInfo.headings.endsWith(']')) {
+        if (
+          typeof metaInfo.headings === "string" &&
+          metaInfo.headings.startsWith("[") &&
+          metaInfo.headings.endsWith("]")
+        ) {
           const matches = metaInfo.headings.match(/'([^']*)'/g);
           if (matches) {
-            headings = matches.map(match => match.slice(1, -1));
+            headings = matches.map((match) => match.slice(1, -1));
           }
         }
 
         if (headings.length > 0) {
           const escapedHeadings = headings
-            .map(h => ChatValidators.escapeHtml(h))
-            .join(' &gt; ');
+            .map((h) => ChatValidators.escapeHtml(h))
+            .join(" &gt; ");
           result += `<br><strong>Section:</strong> ${escapedHeadings}`;
         }
       } catch (parseError) {
-        if (typeof metaInfo.headings === 'string' && metaInfo.headings.length < LIMITS.MAX_HEADINGS_LENGTH) {
+        if (
+          typeof metaInfo.headings === "string" &&
+          metaInfo.headings.length < LIMITS.MAX_HEADINGS_LENGTH
+        ) {
           result += `<br><strong>Section:</strong> ${ChatValidators.escapeHtml(metaInfo.headings)}`;
         }
       }
@@ -820,14 +849,17 @@ class MessageRenderer {
    * Builds references section HTML
    */
   _buildReferencesSection(citations) {
-    let referencesHtml = '<div class="references-section"><h4>References:</h4><ol class="references-list">';
+    let referencesHtml =
+      '<div class="references-section"><h4>References:</h4><ol class="references-list">';
 
-    const sortedNums = Object.keys(citations).sort((a, b) => parseInt(a) - parseInt(b));
-    sortedNums.forEach(num => {
+    const sortedNums = Object.keys(citations).sort(
+      (a, b) => parseInt(a) - parseInt(b),
+    );
+    sortedNums.forEach((num) => {
       referencesHtml += `<li id="ref-${num}" class="reference-item">${citations[num]}</li>`;
     });
 
-    referencesHtml += '</ol></div>';
+    referencesHtml += "</ol></div>";
     return referencesHtml;
   }
 
@@ -835,24 +867,29 @@ class MessageRenderer {
    * Attaches click/keyboard handlers to citation links
    */
   _attachCitationHandlers(messageElement) {
-    messageElement.querySelectorAll('.citation-link').forEach(link => {
+    messageElement.querySelectorAll(".citation-link").forEach((link) => {
       const scrollToReference = (citationNum) => {
-        const referenceElement = messageElement.querySelector(`#ref-${citationNum}`);
+        const referenceElement = messageElement.querySelector(
+          `#ref-${citationNum}`,
+        );
         if (referenceElement) {
-          referenceElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          referenceElement.classList.add('highlighted');
+          referenceElement.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+          });
+          referenceElement.classList.add("highlighted");
           setTimeout(() => {
-            referenceElement.classList.remove('highlighted');
+            referenceElement.classList.remove("highlighted");
           }, TIMINGS.HIGHLIGHT_DURATION);
         }
       };
 
-      link.addEventListener('click', (e) => {
+      link.addEventListener("click", (e) => {
         scrollToReference(e.target.dataset.citation);
       });
 
-      link.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+      link.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           scrollToReference(e.target.dataset.citation);
         }
@@ -864,11 +901,11 @@ class MessageRenderer {
    * Shows copy success indicator
    */
   _showCopySuccess(btn) {
-    btn.textContent = '✓';
-    btn.classList.add('copied');
+    btn.textContent = "✓";
+    btn.classList.add("copied");
     setTimeout(() => {
-      btn.textContent = '⧉';
-      btn.classList.remove('copied');
+      btn.textContent = "⧉";
+      btn.classList.remove("copied");
     }, TIMINGS.COPY_SUCCESS_DURATION);
   }
 
@@ -876,11 +913,11 @@ class MessageRenderer {
    * Fallback copy method for older browsers
    */
   _fallbackCopy(text, btn) {
-    const textArea = document.createElement('textarea');
+    const textArea = document.createElement("textarea");
     textArea.value = text;
     document.body.appendChild(textArea);
     textArea.select();
-    document.execCommand('copy');
+    document.execCommand("copy");
     document.body.removeChild(textArea);
     this._showCopySuccess(btn);
   }
@@ -961,8 +998,8 @@ class StyleGenerator {
     return `
       .universal-chat-button {
         position: fixed;
-        ${position.includes('right') ? 'right: 20px' : 'left: 20px'};
-        ${position.includes('bottom') ? 'bottom: 20px' : 'top: 20px'};
+        ${position.includes("right") ? "right: 20px" : "left: 20px"};
+        ${position.includes("bottom") ? "bottom: 20px" : "top: 20px"};
         width: var(--button-size);
         height: var(--button-size);
         border-radius: 2px;
@@ -1043,7 +1080,7 @@ class StyleGenerator {
       .button-message-preview {
         position: absolute;
         bottom: -35px;
-        ${position.includes('right') ? 'right: 0' : 'left: 0'};
+        ${position.includes("right") ? "right: 0" : "left: 0"};
         background: var(--chat-background);
         padding: 8px 12px;
         border-radius: 2px;
@@ -1064,8 +1101,8 @@ class StyleGenerator {
     return `
       .universal-chat-window {
         position: fixed;
-        ${position.includes('right') ? 'right: 20px' : 'left: 20px'};
-        ${position.includes('bottom') ? 'bottom: calc(var(--button-size) + 40px)' : 'top: calc(var(--button-size) + 40px)'};
+        ${position.includes("right") ? "right: 20px" : "left: 20px"};
+        ${position.includes("bottom") ? "bottom: calc(var(--button-size) + 40px)" : "top: calc(var(--button-size) + 40px)"};
         width: var(--window-width);
         height: var(--window-height);
         max-height: calc(100vh - var(--button-size) - 60px);
@@ -1198,7 +1235,7 @@ class StyleGenerator {
       }
 
       .message.user .message-bubble {
-        background: ${ColorUtils.getColorWithOpacity('var(--chat-user-color)', this.options.userMessageOpacity)};
+        background: ${ColorUtils.getColorWithOpacity("var(--chat-user-color)", this.options.userMessageOpacity)};
         border: 1px solid var(--chat-border);
         color: var(--chat-user-fg);
         border-radius: 2px;
@@ -1206,7 +1243,7 @@ class StyleGenerator {
       }
 
       .message.assistant .message-bubble {
-        background: ${ColorUtils.getColorWithOpacity('var(--chat-assistant-color)', this.options.assistantMessageOpacity)};
+        background: ${ColorUtils.getColorWithOpacity("var(--chat-assistant-color)", this.options.assistantMessageOpacity)};
         border: 1px solid var(--chat-border);
         border-radius: 2px;
         color: var(--chat-assistant-fg);
@@ -1221,7 +1258,7 @@ class StyleGenerator {
       .typing-indicator {
         display: inline-block;
         padding: 0.75rem 1rem;
-        background: ${ColorUtils.getColorWithOpacity('var(--chat-assistant-color)', this.options.assistantMessageOpacity)};
+        background: ${ColorUtils.getColorWithOpacity("var(--chat-assistant-color)", this.options.assistantMessageOpacity)};
         border: 1px solid var(--chat-border);
         border-radius: 2px;
       }
@@ -1701,17 +1738,19 @@ class AccessibilityManager {
     if (!this.window) return [];
 
     const focusableSelectors = [
-      'button:not([disabled]):not([tabindex=\'-1\'])',
-      'a[href]:not([tabindex=\'-1\'])',
-      'input:not([disabled]):not([tabindex=\'-1\'])',
-      'textarea:not([disabled]):not([tabindex=\'-1\'])',
+      "button:not([disabled]):not([tabindex='-1'])",
+      "a[href]:not([tabindex='-1'])",
+      "input:not([disabled]):not([tabindex='-1'])",
+      "textarea:not([disabled]):not([tabindex='-1'])",
       '[tabindex]:not([tabindex="-1"])',
-    ].join(', ');
+    ].join(", ");
 
-    const elements = Array.from(this.window.querySelectorAll(focusableSelectors));
+    const elements = Array.from(
+      this.window.querySelectorAll(focusableSelectors),
+    );
 
     if (this.options.debug) {
-      console.log('Focusable elements found:', elements.length);
+      console.log("Focusable elements found:", elements.length);
       elements.forEach((el, i) => {
         console.log(`  ${i}: ${el.tagName}.${el.className}`);
       });
@@ -1724,7 +1763,7 @@ class AccessibilityManager {
    * Traps focus within chat window
    */
   trapFocus(e) {
-    if (e.key !== 'Tab') return;
+    if (e.key !== "Tab") return;
 
     e.preventDefault();
 
@@ -1735,7 +1774,9 @@ class AccessibilityManager {
     const currentIndex = focusableElements.indexOf(activeElement);
 
     if (this.options.debug) {
-      console.log(`Tab pressed! Shift: ${e.shiftKey}, Current: ${activeElement.className}, Index: ${currentIndex}`);
+      console.log(
+        `Tab pressed! Shift: ${e.shiftKey}, Current: ${activeElement.className}, Index: ${currentIndex}`,
+      );
     }
 
     if (currentIndex === -1) {
@@ -1749,9 +1790,11 @@ class AccessibilityManager {
 
     let nextIndex;
     if (e.shiftKey) {
-      nextIndex = currentIndex === 0 ? focusableElements.length - 1 : currentIndex - 1;
+      nextIndex =
+        currentIndex === 0 ? focusableElements.length - 1 : currentIndex - 1;
     } else {
-      nextIndex = currentIndex === focusableElements.length - 1 ? 0 : currentIndex + 1;
+      nextIndex =
+        currentIndex === focusableElements.length - 1 ? 0 : currentIndex + 1;
     }
 
     if (this.options.debug) {
@@ -1766,7 +1809,7 @@ class AccessibilityManager {
    */
   setup() {
     this.focusTrapHandler = (e) => this.trapFocus(e);
-    document.addEventListener('keydown', this.focusTrapHandler);
+    document.addEventListener("keydown", this.focusTrapHandler);
   }
 
   /**
@@ -1774,7 +1817,7 @@ class AccessibilityManager {
    */
   remove() {
     if (this.focusTrapHandler) {
-      document.removeEventListener('keydown', this.focusTrapHandler);
+      document.removeEventListener("keydown", this.focusTrapHandler);
       this.focusTrapHandler = null;
     }
   }
@@ -1806,21 +1849,27 @@ class ChatUI {
     this._injectStyles();
     this._createWidget();
     this._bindEvents();
-    this.accessibilityManager = new AccessibilityManager(this.elements.window, this.options);
+    this.accessibilityManager = new AccessibilityManager(
+      this.elements.window,
+      this.options,
+    );
   }
 
   /**
    * Opens chat window
    */
   open() {
-    this.elements.window.classList.add('open');
-    this.elements.button.classList.add('chat-open');
-    this.elements.button.innerHTML = '×';
-    this.elements.button.setAttribute('aria-label', 'Close chat. Press Escape or Enter to close');
-    this.elements.button.setAttribute('aria-expanded', 'true');
-    this.elements.button.setAttribute('tabindex', '-1');
-    this.elements.button.title = 'Close chat (Escape)';
-    this.elements.window.setAttribute('aria-modal', 'true');
+    this.elements.window.classList.add("open");
+    this.elements.button.classList.add("chat-open");
+    this.elements.button.innerHTML = "×";
+    this.elements.button.setAttribute(
+      "aria-label",
+      "Close chat. Press Escape or Enter to close",
+    );
+    this.elements.button.setAttribute("aria-expanded", "true");
+    this.elements.button.setAttribute("tabindex", "-1");
+    this.elements.button.title = "Close chat (Escape)";
+    this.elements.window.setAttribute("aria-modal", "true");
 
     this.hideMessagePreview();
     this.hideButtonTyping();
@@ -1836,14 +1885,17 @@ class ChatUI {
    * Closes chat window
    */
   close() {
-    this.elements.window.classList.remove('open');
-    this.elements.button.classList.remove('chat-open');
-    this.elements.button.innerHTML = '💬';
-    this.elements.button.setAttribute('aria-label', 'Open chat. Press Enter to open, Escape to close');
-    this.elements.button.setAttribute('aria-expanded', 'false');
-    this.elements.button.setAttribute('tabindex', '0');
-    this.elements.button.title = 'Open chat (Enter)';
-    this.elements.window.setAttribute('aria-modal', 'false');
+    this.elements.window.classList.remove("open");
+    this.elements.button.classList.remove("chat-open");
+    this.elements.button.innerHTML = "💬";
+    this.elements.button.setAttribute(
+      "aria-label",
+      "Open chat. Press Enter to open, Escape to close",
+    );
+    this.elements.button.setAttribute("aria-expanded", "false");
+    this.elements.button.setAttribute("tabindex", "0");
+    this.elements.button.title = "Open chat (Enter)";
+    this.elements.window.setAttribute("aria-modal", "false");
 
     this.accessibilityManager.remove();
     this.elements.button.focus();
@@ -1853,11 +1905,11 @@ class ChatUI {
    * Adds message to chat
    */
   addMessage(type, content, time) {
-    const messageEl = document.createElement('div');
+    const messageEl = document.createElement("div");
     messageEl.className = `message ${type}`;
-    messageEl.setAttribute('role', 'article');
-    const sender = type === 'user' ? 'You' : 'Assistant';
-    messageEl.setAttribute('aria-label', `Message from ${sender} at ${time}`);
+    messageEl.setAttribute("role", "article");
+    const sender = type === "user" ? "You" : "Assistant";
+    messageEl.setAttribute("aria-label", `Message from ${sender} at ${time}`);
     messageEl.innerHTML = `
       <div class="message-bubble">${content}</div>
       <div class="message-time" aria-label="sent at ${time}">${time}</div>
@@ -1871,13 +1923,14 @@ class ChatUI {
    * Shows typing indicator
    */
   showTyping() {
-    const typingEl = document.createElement('div');
-    typingEl.className = 'message assistant';
-    typingEl.id = 'typing-indicator';
-    typingEl.setAttribute('role', 'status');
-    typingEl.setAttribute('aria-live', 'polite');
-    typingEl.setAttribute('aria-label', 'Assistant is typing');
-    typingEl.innerHTML = '<div class="typing-indicator" aria-hidden="true"><span></span><span></span><span></span></div>';
+    const typingEl = document.createElement("div");
+    typingEl.className = "message assistant";
+    typingEl.id = "typing-indicator";
+    typingEl.setAttribute("role", "status");
+    typingEl.setAttribute("aria-live", "polite");
+    typingEl.setAttribute("aria-label", "Assistant is typing");
+    typingEl.innerHTML =
+      '<div class="typing-indicator" aria-hidden="true"><span></span><span></span><span></span></div>';
     this.elements.messages.appendChild(typingEl);
     this._scrollToBottom();
   }
@@ -1886,7 +1939,7 @@ class ChatUI {
    * Hides typing indicator
    */
   hideTyping() {
-    const typingEl = document.getElementById('typing-indicator');
+    const typingEl = document.getElementById("typing-indicator");
     if (typingEl) typingEl.remove();
   }
 
@@ -1894,14 +1947,14 @@ class ChatUI {
    * Shows typing indicator on button
    */
   showButtonTyping() {
-    this.elements.buttonTypingIndicator.style.display = 'flex';
+    this.elements.buttonTypingIndicator.style.display = "flex";
   }
 
   /**
    * Hides typing indicator on button
    */
   hideButtonTyping() {
-    this.elements.buttonTypingIndicator.style.display = 'none';
+    this.elements.buttonTypingIndicator.style.display = "none";
   }
 
   /**
@@ -1910,13 +1963,17 @@ class ChatUI {
   showMessagePreview(message) {
     if (message) {
       this.hideMessagePreview();
-      const preview = document.createElement('div');
-      preview.className = 'button-message-preview';
-      preview.id = 'message-preview';
-      const truncated = message.length > 60 ? message.substring(0, 60) + '...' : message;
+      const preview = document.createElement("div");
+      preview.className = "button-message-preview";
+      preview.id = "message-preview";
+      const truncated =
+        message.length > 60 ? message.substring(0, 60) + "..." : message;
       preview.textContent = truncated;
       this.elements.button.appendChild(preview);
-      this.previewTimeout = setTimeout(() => this.hideMessagePreview(), TIMINGS.PREVIEW_TIMEOUT);
+      this.previewTimeout = setTimeout(
+        () => this.hideMessagePreview(),
+        TIMINGS.PREVIEW_TIMEOUT,
+      );
     }
   }
 
@@ -1924,7 +1981,7 @@ class ChatUI {
    * Hides message preview
    */
   hideMessagePreview() {
-    const preview = document.getElementById('message-preview');
+    const preview = document.getElementById("message-preview");
     if (preview) preview.remove();
     if (this.previewTimeout) clearTimeout(this.previewTimeout);
   }
@@ -1933,9 +1990,9 @@ class ChatUI {
    * Shows error message
    */
   showError(message) {
-    const errorEl = document.createElement('div');
-    errorEl.className = 'message error';
-    errorEl.setAttribute('role', 'alert');
+    const errorEl = document.createElement("div");
+    errorEl.className = "message error";
+    errorEl.setAttribute("role", "alert");
     errorEl.innerHTML = `
       <div class="message-bubble">
         ${message}
@@ -1946,11 +2003,11 @@ class ChatUI {
     this.elements.messages.appendChild(errorEl);
     this._scrollToBottom();
 
-    const retryBtn = errorEl.querySelector('.retry-btn');
-    retryBtn.addEventListener('click', async () => {
+    const retryBtn = errorEl.querySelector(".retry-btn");
+    retryBtn.addEventListener("click", async () => {
       retryBtn.disabled = true;
-      retryBtn.textContent = 'Retrying...';
-      this.eventBus.emit('retry');
+      retryBtn.textContent = "Retrying...";
+      this.eventBus.emit("retry");
       errorEl.remove();
     });
   }
@@ -1959,7 +2016,7 @@ class ChatUI {
    * Clears all messages
    */
   clearMessages() {
-    this.elements.messages.innerHTML = '';
+    this.elements.messages.innerHTML = "";
   }
 
   /**
@@ -1968,9 +2025,9 @@ class ChatUI {
   updateUnreadBadge(count) {
     if (count > 0) {
       this.elements.unreadBadge.textContent = count;
-      this.elements.unreadBadge.style.display = 'block';
+      this.elements.unreadBadge.style.display = "block";
     } else {
-      this.elements.unreadBadge.style.display = 'none';
+      this.elements.unreadBadge.style.display = "none";
     }
   }
 
@@ -1978,10 +2035,10 @@ class ChatUI {
    * Clears input field
    */
   clearInput() {
-    this.elements.input.value = '';
+    this.elements.input.value = "";
     this._autoResizeInput();
-    this.elements.sendBtn.setAttribute('aria-disabled', 'true');
-    this.elements.sendBtn.setAttribute('tabindex', '-1');
+    this.elements.sendBtn.setAttribute("aria-disabled", "true");
+    this.elements.sendBtn.setAttribute("tabindex", "-1");
   }
 
   /**
@@ -1995,9 +2052,9 @@ class ChatUI {
    * Makes button pulse
    */
   pulseButton() {
-    this.elements.button.style.animation = 'pulse 0.5s ease 3';
+    this.elements.button.style.animation = "pulse 0.5s ease 3";
     setTimeout(() => {
-      this.elements.button.style.animation = '';
+      this.elements.button.style.animation = "";
     }, TIMINGS.PULSE_ANIMATION);
   }
 
@@ -2024,70 +2081,78 @@ class ChatUI {
    * Auto-resizes input
    */
   _autoResizeInput() {
-    this.elements.input.style.height = 'auto';
-    this.elements.input.style.height = Math.min(
-      this.elements.input.scrollHeight,
-      SIZES.INPUT_MAX_HEIGHT
-    ) + 'px';
+    this.elements.input.style.height = "auto";
+    this.elements.input.style.height =
+      Math.min(this.elements.input.scrollHeight, SIZES.INPUT_MAX_HEIGHT) + "px";
   }
 
   /**
    * Binds event listeners
    */
   _bindEvents() {
-    this.elements.button.addEventListener('click', () => {
-      this.eventBus.emit('toggle');
+    this.elements.button.addEventListener("click", () => {
+      this.eventBus.emit("toggle");
     });
 
-    this.elements.closeBtn.addEventListener('click', () => {
-      this.eventBus.emit('close');
+    this.elements.closeBtn.addEventListener("click", () => {
+      this.eventBus.emit("close");
     });
 
-    this.elements.clearBtn.addEventListener('click', () => {
-      this.eventBus.emit('clear');
+    this.elements.clearBtn.addEventListener("click", () => {
+      this.eventBus.emit("clear");
     });
 
-    this.elements.sendBtn.addEventListener('click', () => {
-      if (this.elements.sendBtn.getAttribute('aria-disabled') !== 'true') {
-        this.eventBus.emit('send', this.getInputValue());
+    this.elements.sendBtn.addEventListener("click", () => {
+      if (this.elements.sendBtn.getAttribute("aria-disabled") !== "true") {
+        this.eventBus.emit("send", this.getInputValue());
       }
     });
 
-    this.elements.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    this.elements.input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (this.elements.sendBtn.getAttribute('aria-disabled') !== 'true') {
-          this.eventBus.emit('send', this.getInputValue());
+        if (this.elements.sendBtn.getAttribute("aria-disabled") !== "true") {
+          this.eventBus.emit("send", this.getInputValue());
         }
       }
     });
 
-    this.elements.input.addEventListener('input', () => {
+    this.elements.input.addEventListener("input", () => {
       const hasText = this.elements.input.value.trim().length > 0;
-      this.elements.sendBtn.setAttribute('aria-disabled', hasText ? 'false' : 'true');
-      this.elements.sendBtn.setAttribute('tabindex', hasText ? '0' : '-1');
-      this._debounce('autoResize', () => this._autoResizeInput(), TIMINGS.DEBOUNCE_INPUT);
+      this.elements.sendBtn.setAttribute(
+        "aria-disabled",
+        hasText ? "false" : "true",
+      );
+      this.elements.sendBtn.setAttribute("tabindex", hasText ? "0" : "-1");
+      this._debounce(
+        "autoResize",
+        () => this._autoResizeInput(),
+        TIMINGS.DEBOUNCE_INPUT,
+      );
     });
 
     // iOS keyboard handling
-    this.elements.input.addEventListener('focus', () => {
+    this.elements.input.addEventListener("focus", () => {
       setTimeout(() => {
-        this.elements.input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        this.elements.input.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
         if (window.innerWidth <= SIZES.MOBILE_BREAKPOINT) {
           this.elements.messages.style.paddingBottom = `${SIZES.MOBILE_PADDING_BOTTOM}px`;
         }
       }, TIMINGS.IOS_KEYBOARD_DELAY);
     });
 
-    this.elements.input.addEventListener('blur', () => {
+    this.elements.input.addEventListener("blur", () => {
       if (window.innerWidth <= SIZES.MOBILE_BREAKPOINT) {
-        this.elements.messages.style.paddingBottom = '';
+        this.elements.messages.style.paddingBottom = "";
       }
     });
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        this.eventBus.emit('close');
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        this.eventBus.emit("close");
       }
     });
   }
@@ -2109,12 +2174,13 @@ class ChatUI {
     let viewportMeta = document.querySelector('meta[name="viewport"]');
 
     if (!viewportMeta) {
-      viewportMeta = document.createElement('meta');
-      viewportMeta.name = 'viewport';
-      viewportMeta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+      viewportMeta = document.createElement("meta");
+      viewportMeta.name = "viewport";
+      viewportMeta.content =
+        "width=device-width, initial-scale=1.0, viewport-fit=cover";
       document.head.appendChild(viewportMeta);
-    } else if (!viewportMeta.content.includes('viewport-fit=cover')) {
-      viewportMeta.content = viewportMeta.content + ', viewport-fit=cover';
+    } else if (!viewportMeta.content.includes("viewport-fit=cover")) {
+      viewportMeta.content = viewportMeta.content + ", viewport-fit=cover";
     }
   }
 
@@ -2122,11 +2188,11 @@ class ChatUI {
    * Injects CSS styles
    */
   _injectStyles() {
-    if (document.getElementById('universal-chat-styles')) return;
+    if (document.getElementById("universal-chat-styles")) return;
 
     const styleGenerator = new StyleGenerator(this.options);
-    const styles = document.createElement('style');
-    styles.id = 'universal-chat-styles';
+    const styles = document.createElement("style");
+    styles.id = "universal-chat-styles";
     styles.textContent = styleGenerator.generate();
     document.head.appendChild(styles);
   }
@@ -2136,37 +2202,44 @@ class ChatUI {
    */
   _createWidget() {
     // Button
-    this.elements.button = document.createElement('button');
-    this.elements.button.className = 'universal-chat-button';
-    this.elements.button.innerHTML = '💬';
-    this.elements.button.setAttribute('aria-label', 'Open chat. Press Enter to open, Escape to close');
-    this.elements.button.setAttribute('aria-expanded', 'false');
-    this.elements.button.setAttribute('aria-haspopup', 'dialog');
-    this.elements.button.setAttribute('tabindex', '0');
-    this.elements.button.title = 'Open chat (Enter)';
+    this.elements.button = document.createElement("button");
+    this.elements.button.className = "universal-chat-button";
+    this.elements.button.innerHTML = "💬";
+    this.elements.button.setAttribute(
+      "aria-label",
+      "Open chat. Press Enter to open, Escape to close",
+    );
+    this.elements.button.setAttribute("aria-expanded", "false");
+    this.elements.button.setAttribute("aria-haspopup", "dialog");
+    this.elements.button.setAttribute("tabindex", "0");
+    this.elements.button.title = "Open chat (Enter)";
 
     // Unread badge
-    this.elements.unreadBadge = document.createElement('span');
-    this.elements.unreadBadge.className = 'chat-unread-badge';
-    this.elements.unreadBadge.style.display = 'none';
-    this.elements.unreadBadge.setAttribute('aria-label', 'unread messages');
+    this.elements.unreadBadge = document.createElement("span");
+    this.elements.unreadBadge.className = "chat-unread-badge";
+    this.elements.unreadBadge.style.display = "none";
+    this.elements.unreadBadge.setAttribute("aria-label", "unread messages");
     this.elements.button.appendChild(this.elements.unreadBadge);
 
     // Typing indicator for button
-    this.elements.buttonTypingIndicator = document.createElement('div');
-    this.elements.buttonTypingIndicator.className = 'button-typing-indicator';
-    this.elements.buttonTypingIndicator.innerHTML = '<span></span><span></span><span></span>';
-    this.elements.buttonTypingIndicator.style.display = 'none';
-    this.elements.buttonTypingIndicator.setAttribute('role', 'status');
-    this.elements.buttonTypingIndicator.setAttribute('aria-label', 'Assistant is typing');
+    this.elements.buttonTypingIndicator = document.createElement("div");
+    this.elements.buttonTypingIndicator.className = "button-typing-indicator";
+    this.elements.buttonTypingIndicator.innerHTML =
+      "<span></span><span></span><span></span>";
+    this.elements.buttonTypingIndicator.style.display = "none";
+    this.elements.buttonTypingIndicator.setAttribute("role", "status");
+    this.elements.buttonTypingIndicator.setAttribute(
+      "aria-label",
+      "Assistant is typing",
+    );
     this.elements.button.appendChild(this.elements.buttonTypingIndicator);
 
     // Window
-    this.elements.window = document.createElement('div');
-    this.elements.window.className = 'universal-chat-window';
-    this.elements.window.setAttribute('role', 'dialog');
-    this.elements.window.setAttribute('aria-label', this.options.title);
-    this.elements.window.setAttribute('aria-modal', 'false');
+    this.elements.window = document.createElement("div");
+    this.elements.window.className = "universal-chat-window";
+    this.elements.window.setAttribute("role", "dialog");
+    this.elements.window.setAttribute("aria-label", this.options.title);
+    this.elements.window.setAttribute("aria-modal", "false");
     this.elements.window.innerHTML = `
       <div class="chat-header">
         <div class="chat-header-info">
@@ -2177,7 +2250,7 @@ class ChatUI {
           <button class="chat-header-btn chat-close-btn" title="Minimize" aria-label="Close chat">×</button>
         </div>
       </div>
-      ${this.options.showModelInfo ? '<div class="model-info" id="model-info" role="status"></div>' : ''}
+      ${this.options.showModelInfo ? '<div class="model-info" id="model-info" role="status"></div>' : ""}
       <div class="chat-messages" role="log" aria-live="polite" aria-atomic="false" aria-label="Chat conversation"></div>
       <div class="chat-input-area">
         <div class="chat-input-container">
@@ -2198,20 +2271,24 @@ class ChatUI {
     document.body.appendChild(this.elements.button);
     document.body.appendChild(this.elements.window);
 
-    this.elements.messages = this.elements.window.querySelector('.chat-messages');
-    this.elements.input = this.elements.window.querySelector('.chat-input');
-    this.elements.sendBtn = this.elements.window.querySelector('.chat-send-btn');
-    this.elements.closeBtn = this.elements.window.querySelector('.chat-close-btn');
-    this.elements.clearBtn = this.elements.window.querySelector('.chat-clear-btn');
-    this.elements.modelInfo = this.elements.window.querySelector('#model-info');
+    this.elements.messages =
+      this.elements.window.querySelector(".chat-messages");
+    this.elements.input = this.elements.window.querySelector(".chat-input");
+    this.elements.sendBtn =
+      this.elements.window.querySelector(".chat-send-btn");
+    this.elements.closeBtn =
+      this.elements.window.querySelector(".chat-close-btn");
+    this.elements.clearBtn =
+      this.elements.window.querySelector(".chat-clear-btn");
+    this.elements.modelInfo = this.elements.window.querySelector("#model-info");
   }
 
   /**
    * Destroys UI
    */
   destroy() {
-    Object.values(this.debounceTimers).forEach(timer => clearTimeout(timer));
-    Object.values(this.rafIds).forEach(id => cancelAnimationFrame(id));
+    Object.values(this.debounceTimers).forEach((timer) => clearTimeout(timer));
+    Object.values(this.rafIds).forEach((id) => cancelAnimationFrame(id));
 
     if (this.previewTimeout) {
       clearTimeout(this.previewTimeout);
@@ -2224,7 +2301,7 @@ class ChatUI {
     if (this.elements.button) this.elements.button.remove();
     if (this.elements.window) this.elements.window.remove();
 
-    const styleEl = document.getElementById('universal-chat-styles');
+    const styleEl = document.getElementById("universal-chat-styles");
     if (styleEl) styleEl.remove();
   }
 }
@@ -2245,7 +2322,7 @@ class UniversalChatWidget {
     this.eventBus = new EventBus();
     this.state = new ChatState(this.options);
     this.api = new ChatAPI(this.options.apiEndpoint, this.options.model, {
-      debug: this.options.debug
+      debug: this.options.debug,
     });
     this.renderer = new MessageRenderer(this.options);
     this.ui = new ChatUI(this.options, this.eventBus);
@@ -2264,7 +2341,7 @@ class UniversalChatWidget {
     }
 
     // Auto-open if configured
-    if (this.options.startOpen && !this.state.get('hasInteracted')) {
+    if (this.options.startOpen && !this.state.get("hasInteracted")) {
       setTimeout(() => this._handleOpen(), TIMINGS.START_OPEN_DELAY);
     }
   }
@@ -2273,15 +2350,15 @@ class UniversalChatWidget {
    * Subscribe to all events
    */
   _subscribeToEvents() {
-    this.eventBus.on('toggle', () => {
-      this.state.get('isOpen') ? this._handleClose() : this._handleOpen();
+    this.eventBus.on("toggle", () => {
+      this.state.get("isOpen") ? this._handleClose() : this._handleOpen();
     });
 
-    this.eventBus.on('open', () => this._handleOpen());
-    this.eventBus.on('close', () => this._handleClose());
-    this.eventBus.on('clear', () => this._handleClear());
-    this.eventBus.on('send', (message) => this._handleSend(message));
-    this.eventBus.on('retry', () => this._handleRetry());
+    this.eventBus.on("open", () => this._handleOpen());
+    this.eventBus.on("close", () => this._handleClose());
+    this.eventBus.on("clear", () => this._handleClear());
+    this.eventBus.on("send", (message) => this._handleSend(message));
+    this.eventBus.on("retry", () => this._handleRetry());
 
     // Subscribe to state changes
     this.state.subscribe((newState, oldState) => {
@@ -2332,15 +2409,22 @@ class UniversalChatWidget {
     if (!message) return;
 
     // Add user message to state and UI
-    const history = [...this.state.get('history'), { role: 'user', content: message }];
+    const history = [
+      ...this.state.get("history"),
+      { role: "user", content: message },
+    ];
     this.state.update({ history });
 
     const formatted = this.renderer.formatMessage(message);
-    const messageEl = this.ui.addMessage('user', formatted, this._formatTime(new Date()));
+    const messageEl = this.ui.addMessage(
+      "user",
+      formatted,
+      this._formatTime(new Date()),
+    );
     this.ui.clearInput();
     this.ui.showTyping();
 
-    if (!this.state.get('isOpen')) {
+    if (!this.state.get("isOpen")) {
       this.ui.showButtonTyping();
     }
 
@@ -2350,14 +2434,14 @@ class UniversalChatWidget {
       const response = await this.api.sendMessage(
         message,
         optimizedHistory,
-        this.state.get('traceId')
+        this.state.get("traceId"),
       );
 
       // Update state with response
       this.state.update({
         history: [
-          ...this.state.get('history'),
-          { role: 'assistant', content: response.content },
+          ...this.state.get("history"),
+          { role: "assistant", content: response.content },
         ],
         traceId: response.traceId,
         lastFailedMessage: null,
@@ -2376,9 +2460,9 @@ class UniversalChatWidget {
       this.ui.hideButtonTyping();
       const formattedResponse = this.renderer.formatMessage(response.content);
       const assistantEl = this.ui.addMessage(
-        'assistant',
+        "assistant",
         formattedResponse,
-        this._formatTime(new Date())
+        this._formatTime(new Date()),
       );
 
       // Add enhancements
@@ -2387,22 +2471,21 @@ class UniversalChatWidget {
       this.renderer.renderCitations(assistantEl, response.sources);
 
       // Handle unread if closed
-      if (!this.state.get('isOpen')) {
+      if (!this.state.get("isOpen")) {
         this.state.update({
-          unreadCount: this.state.get('unreadCount') + 1,
+          unreadCount: this.state.get("unreadCount") + 1,
         });
         this.ui.showMessagePreview(response.content);
         this.ui.pulseButton();
       }
-
     } catch (error) {
-      console.error('Chat error:', error);
+      console.error("Chat error:", error);
       this.ui.hideTyping();
       this.ui.hideButtonTyping();
       this.state.update({ lastFailedMessage: message });
 
       const errorInfo = error.errorInfo || {
-        message: 'Something went wrong. Please try again.',
+        message: "Something went wrong. Please try again.",
       };
       this.ui.showError(errorInfo.message);
     }
@@ -2412,7 +2495,7 @@ class UniversalChatWidget {
    * Handles retry
    */
   async _handleRetry() {
-    const message = this.state.get('lastFailedMessage');
+    const message = this.state.get("lastFailedMessage");
     if (message) {
       await this._handleSend(message);
     }
@@ -2424,9 +2507,9 @@ class UniversalChatWidget {
   _showWelcomeMessage() {
     const formatted = this.renderer.formatMessage(this.options.welcomeMessage);
     const welcomeEl = this.ui.addMessage(
-      'assistant',
+      "assistant",
       formatted,
-      this._formatTime(new Date())
+      this._formatTime(new Date()),
     );
     this.renderer.addCopyButtonsToCodeBlocks(welcomeEl);
     this.renderer.renderLatex(welcomeEl);
@@ -2437,16 +2520,16 @@ class UniversalChatWidget {
    * Rebuilds messages from history
    */
   _rebuildMessagesFromHistory() {
-    const history = this.state.get('history');
+    const history = this.state.get("history");
     if (history.length > 0) {
       this.ui.clearMessages();
-      history.forEach(msg => {
-        if (msg.role !== 'system') {
+      history.forEach((msg) => {
+        if (msg.role !== "system") {
           const formatted = this.renderer.formatMessage(msg.content);
           const msgEl = this.ui.addMessage(
-            msg.role === 'user' ? 'user' : 'assistant',
+            msg.role === "user" ? "user" : "assistant",
             formatted,
-            ''
+            "",
           );
           this.renderer.addCopyButtonsToCodeBlocks(msgEl);
           this.renderer.renderLatex(msgEl);
@@ -2461,29 +2544,32 @@ class UniversalChatWidget {
    */
   _normalizeOptions(options) {
     return {
-      title: options.title || 'Course Assistant',
-      welcomeMessage: options.welcomeMessage || 'Hello! How can I help you today?',
-      placeholder: options.placeholder || 'Type your question...',
-      position: options.position || 'bottom-right',
-      apiEndpoint: ChatValidators.validateApiEndpoint(options.apiEndpoint) || 'https://your-worker.workers.dev',
-      model: ChatValidators.validateModel(options.model) || 'gpt-3.5-turbo',
-      titleBackgroundColor: options.titleBackgroundColor || '#2c3532',
-      titleFontColor: options.titleFontColor || '#ffffff',
-      assistantColor: options.assistantColor || '#fdcd9a',
-      assistantFontColor: options.assistantFontColor || '#2c3532',
+      title: options.title || "Course Assistant",
+      welcomeMessage:
+        options.welcomeMessage || "Hello! How can I help you today?",
+      placeholder: options.placeholder || "Type your question...",
+      position: options.position || "bottom-right",
+      apiEndpoint:
+        ChatValidators.validateApiEndpoint(options.apiEndpoint) ||
+        "https://your-worker.workers.dev",
+      model: ChatValidators.validateModel(options.model) || "gpt-3.5-turbo",
+      titleBackgroundColor: options.titleBackgroundColor || "#2c3532",
+      titleFontColor: options.titleFontColor || "#ffffff",
+      assistantColor: options.assistantColor || "#fdcd9a",
+      assistantFontColor: options.assistantFontColor || "#2c3532",
       assistantMessageOpacity: options.assistantMessageOpacity || 1.0,
-      userColor: options.userColor || '#99bfbb',
-      userFontColor: options.userFontColor || '#2c3532',
+      userColor: options.userColor || "#99bfbb",
+      userFontColor: options.userFontColor || "#2c3532",
       userMessageOpacity: options.userMessageOpacity || 1.0,
-      chatBackground: options.chatBackground || '#ffffff',
-      stampColor: options.stampColor || '#df7d7d',
-      codeBackgroundColor: options.codeBackgroundColor || '#f3f4f6',
+      chatBackground: options.chatBackground || "#ffffff",
+      stampColor: options.stampColor || "#df7d7d",
+      codeBackgroundColor: options.codeBackgroundColor || "#f3f4f6",
       codeOpacity: options.codeOpacity || 0.85,
-      codeTextColor: options.codeTextColor || '#2c3532',
-      borderColor: options.borderColor || '#2c3532',
-      buttonIconColor: options.buttonIconColor || '#ffffff',
-      scrollbarColor: options.scrollbarColor || '#d1d5db',
-      inputTextColor: options.inputTextColor || '#1f2937',
+      codeTextColor: options.codeTextColor || "#2c3532",
+      borderColor: options.borderColor || "#2c3532",
+      buttonIconColor: options.buttonIconColor || "#ffffff",
+      scrollbarColor: options.scrollbarColor || "#d1d5db",
+      inputTextColor: options.inputTextColor || "#1f2937",
       inputAreaOpacity: options.inputAreaOpacity || 0.95,
       startOpen: options.startOpen || false,
       buttonSize: options.buttonSize || SIZES.BUTTON_SIZE,
@@ -2491,8 +2577,10 @@ class UniversalChatWidget {
       windowHeight: options.windowHeight || SIZES.WINDOW_HEIGHT,
       showModelInfo: options.showModelInfo || false,
       maxHistoryTokens: options.maxHistoryTokens || LIMITS.MAX_HISTORY_TOKENS,
-      alwaysKeepRecentMessages: options.alwaysKeepRecentMessages || LIMITS.ALWAYS_KEEP_RECENT,
-      maxHistoryMessages: options.maxHistoryMessages || LIMITS.MAX_HISTORY_MESSAGES,
+      alwaysKeepRecentMessages:
+        options.alwaysKeepRecentMessages || LIMITS.ALWAYS_KEEP_RECENT,
+      maxHistoryMessages:
+        options.maxHistoryMessages || LIMITS.MAX_HISTORY_MESSAGES,
       debug: options.debug || false,
       ...options,
     };
@@ -2502,7 +2590,7 @@ class UniversalChatWidget {
    * Formats time
    */
   _formatTime(date) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
   /**
@@ -2522,7 +2610,7 @@ class UniversalChatWidget {
     this.renderer = null;
 
     if (this.options.debug) {
-      console.log('Chat widget destroyed and cleaned up');
+      console.log("Chat widget destroyed and cleaned up");
     }
   }
 }
@@ -2531,8 +2619,8 @@ class UniversalChatWidget {
 // AUTO-INITIALIZATION & EXPORT
 // ============================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-  const autoInit = document.querySelector('[data-chat-widget]');
+document.addEventListener("DOMContentLoaded", () => {
+  const autoInit = document.querySelector("[data-chat-widget]");
   if (autoInit) {
     const options = autoInit.dataset.chatWidget
       ? JSON.parse(autoInit.dataset.chatWidget)

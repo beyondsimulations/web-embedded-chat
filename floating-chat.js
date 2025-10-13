@@ -2559,11 +2559,11 @@ class UniversalChatWidget {
       titleFontColor: options.titleFontColor || "#FDF8ED",
 
       assistantColor: options.assistantColor || "#FCCF9C",
-      assistantFontColor: options.assistantFontColor || "#363D45",
+      assistantFontColor: options.assistantFontColor || "#3B332B",
       assistantMessageOpacity: options.assistantMessageOpacity || 0.9,
 
       userColor: options.userColor || "#A7C7C6",
-      userFontColor: options.userFontColor || "#363D45",
+      userFontColor: options.userFontColor || "#283E3D",
       userMessageOpacity: options.userMessageOpacity || 0.9,
 
       chatBackground: options.chatBackground || "#ffffff",

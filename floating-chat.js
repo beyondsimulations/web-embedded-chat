@@ -229,6 +229,52 @@ class ChatValidators {
   }
 
   /**
+   * Validates a CSS color value against known safe formats.
+   * Allows hex, rgb/rgba, hsl/hsla, and named CSS colors.
+   * Rejects values containing CSS injection characters.
+   */
+  static validateColor(color) {
+    if (!color || typeof color !== "string") return null;
+    const trimmed = color.trim();
+
+    // Allow hex colors: #rgb, #rrggbb, #rrggbbaa
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    // Allow rgb/rgba
+    if (
+      /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+))?\s*\)$/.test(
+        trimmed,
+      )
+    ) {
+      return trimmed;
+    }
+
+    // Allow hsl/hsla
+    if (
+      /^hsla?\(\s*\d{1,3}\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%\s*(,\s*(0|1|0?\.\d+))?\s*\)$/.test(
+        trimmed,
+      )
+    ) {
+      return trimmed;
+    }
+
+    // Allow named CSS colors and keywords
+    const namedColors =
+      /^(transparent|currentColor|aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgr[ae]y|darkgreen|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategr[ae]y|darkturquoise|darkviolet|deeppink|deepskyblue|dimgr[ae]y|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gr[ae]y|green|greenyellow|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgr[ae]y|lightgreen|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategr[ae]y|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|rebeccapurple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategr[ae]y|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)$/i;
+    if (namedColors.test(trimmed)) {
+      return trimmed;
+    }
+
+    console.warn(
+      "Chat Widget: Color value rejected - unrecognized format:",
+      trimmed,
+    );
+    return null;
+  }
+
+  /**
    * Escapes HTML special characters
    */
   static escapeHtml(unsafe) {
@@ -281,6 +327,7 @@ class ChatState {
       hasInteracted: false,
       traceId: null,
       lastFailedMessage: null,
+      isSending: false,
     };
     this._listeners = new Set();
     this._options = options;
@@ -332,21 +379,30 @@ class ChatState {
   restore() {
     const saved = sessionStorage.getItem("universalChatState");
     if (saved) {
-      const state = JSON.parse(saved);
-      this.update({
-        history: state.history || [],
-        hasInteracted: state.hasInteracted || false,
-        traceId: state.traceId || null,
-      });
+      try {
+        const state = JSON.parse(saved);
+        this.update({
+          history: state.history || [],
+          hasInteracted: state.hasInteracted || false,
+          traceId: state.traceId || null,
+        });
 
-      if (this._options.debug) {
-        console.log(
-          "Client restored traceId from sessionStorage:",
-          this._state.traceId,
+        if (this._options.debug) {
+          console.log(
+            "Client restored traceId from sessionStorage:",
+            this._state.traceId,
+          );
+        }
+
+        return true;
+      } catch (e) {
+        console.warn(
+          "Chat Widget: Failed to restore state, clearing corrupted data:",
+          e.message,
         );
+        sessionStorage.removeItem("universalChatState");
+        return false;
       }
-
-      return true;
     }
     return false;
   }
@@ -467,34 +523,72 @@ class ChatAPI {
     this.endpoint = endpoint;
     this.model = model;
     this.debug = options.debug || false;
+    this.timeout = options.timeout || 30000;
+    this._currentController = null;
+  }
+
+  /**
+   * Cancels any in-flight request
+   */
+  cancel() {
+    if (this._currentController) {
+      this._currentController.abort();
+      this._currentController = null;
+    }
   }
 
   /**
    * Sends message to API and returns response
    */
   async sendMessage(message, history, traceId) {
+    this.cancel();
+
+    const controller = new AbortController();
+    this._currentController = controller;
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
     if (this.debug) {
       console.log("Client sending traceId:", traceId);
     }
 
-    const response = await fetch(this.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message,
-        history,
-        model: this.model,
-        traceId,
-      }),
-    });
+    try {
+      const response = await fetch(this.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          history,
+          model: this.model,
+          traceId,
+        }),
+        signal: controller.signal,
+      });
 
-    const data = await response.json();
+      clearTimeout(timeoutId);
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw this._createError(data.error || "Request failed", response);
+      if (!response.ok) {
+        throw this._createError(data.error || "Request failed", response);
+      }
+
+      return this._extractResponseData(data);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === "AbortError") {
+        const abortError = new Error("Request timed out or was cancelled");
+        abortError.errorInfo = {
+          type: "timeout",
+          message:
+            "Request timed out. The server took too long to respond.",
+        };
+        throw abortError;
+      }
+      throw error;
+    } finally {
+      if (this._currentController === controller) {
+        this._currentController = null;
+      }
     }
-
-    return this._extractResponseData(data);
   }
 
   /**
@@ -613,22 +707,115 @@ class MessageRenderer {
    * Formats message from markdown to HTML
    */
   formatMessage(content) {
-    const escaped = content
+    // Phase 1: Extract code blocks and inline code into placeholders
+    const codeBlocks = [];
+    const inlineCodes = [];
+
+    let processed = content.replace(/```([\s\S]*?)```/g, (_match, code) => {
+      const index = codeBlocks.length;
+      codeBlocks.push(code);
+      return `\x00CODEBLOCK_${index}\x00`;
+    });
+
+    processed = processed.replace(/`([^`]+)`/g, (_match, code) => {
+      const index = inlineCodes.length;
+      inlineCodes.push(code);
+      return `\x00INLINECODE_${index}\x00`;
+    });
+
+    // Extract LaTeX expressions into placeholders (order matters: $$ before $)
+    const latexBlocks = [];
+
+    // Display math: $$...$$ (may span multiple lines)
+    processed = processed.replace(/\$\$([\s\S]*?)\$\$/g, (_match, latex) => {
+      const index = latexBlocks.length;
+      latexBlocks.push({ content: latex, display: true, delim: "$$" });
+      return `\x00LATEX_${index}\x00`;
+    });
+
+    // Display math: \[...\] (may span multiple lines)
+    processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (_match, latex) => {
+      const index = latexBlocks.length;
+      latexBlocks.push({ content: latex, display: true, delim: "\\[" });
+      return `\x00LATEX_${index}\x00`;
+    });
+
+    // Inline math: \(...\)
+    processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_match, latex) => {
+      const index = latexBlocks.length;
+      latexBlocks.push({ content: latex, display: false, delim: "\\(" });
+      return `\x00LATEX_${index}\x00`;
+    });
+
+    // Inline math: $...$ (single line only, non-greedy)
+    processed = processed.replace(/\$([^\$\n]+?)\$/g, (_match, latex) => {
+      const index = latexBlocks.length;
+      latexBlocks.push({ content: latex, display: false, delim: "$" });
+      return `\x00LATEX_${index}\x00`;
+    });
+
+    // Phase 2: HTML-escape the remaining text (not code)
+    processed = processed
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    return escaped
-      .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
+    // Phase 3: Apply markdown formatting
+    processed = processed
       .replace(/^### (.*$)/gm, "<h3>$1</h3>")
       .replace(/^## (.*$)/gm, "<h2>$1</h2>")
       .replace(/^# (.*$)/gm, "<h1>$1</h1>")
+      .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
-      .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\n/g, "<br>")
       .replace(/(<\/h[1-6]>)<br>/g, "$1")
       .replace(/(<\/pre>)<br>/g, "$1");
+
+    // Phase 4: Restore code with separate HTML-escaping
+    codeBlocks.forEach((code, index) => {
+      const escaped = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      processed = processed.replace(
+        `\x00CODEBLOCK_${index}\x00`,
+        `<pre><code>${escaped}</code></pre>`,
+      );
+    });
+
+    inlineCodes.forEach((code, index) => {
+      const escaped = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      processed = processed.replace(
+        `\x00INLINECODE_${index}\x00`,
+        `<code>${escaped}</code>`,
+      );
+    });
+
+    // Restore LaTeX expressions WITHOUT HTML escaping (KaTeX needs raw syntax)
+    // Note: Use a replacer function to avoid $$ being treated as a special
+    // replacement pattern by String.prototype.replace()
+    latexBlocks.forEach((block, index) => {
+      const open = block.delim;
+      const close =
+        open === "$$"
+          ? "$$"
+          : open === "\\["
+            ? "\\]"
+            : open === "\\("
+              ? "\\)"
+              : "$";
+      const restored = `${open}${block.content}${close}`;
+      processed = processed.replace(
+        `\x00LATEX_${index}\x00`,
+        () => restored,
+      );
+    });
+
+    return processed;
   }
 
   /**
@@ -660,6 +847,7 @@ class MessageRenderer {
 
     let content = messageBubble.innerHTML;
     const citations = {};
+    let fallbackProcessed = false;
 
     const citationMatches = content.match(/\[(\d+)\]/g);
     const citationNumbers = citationMatches
@@ -690,16 +878,19 @@ class MessageRenderer {
           citationPattern.lastIndex = 0;
         }
       }
+      fallbackProcessed = true;
     }
 
-    // Replace citation numbers with clickable links
-    content = content.replace(/\[(\d+)\]/g, (match, num) => {
-      const citationNum = parseInt(num);
-      if (citations[citationNum]) {
-        return `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference" role="button" tabindex="0" aria-label="View reference ${citationNum}">[${citationNum}]</span>`;
-      }
-      return match;
-    });
+    // Replace citation numbers with clickable links (skip if fallback already processed)
+    if (!fallbackProcessed) {
+      content = content.replace(/\[(\d+)\]/g, (match, num) => {
+        const citationNum = parseInt(num);
+        if (citations[citationNum]) {
+          return `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference" role="button" tabindex="0" aria-label="View reference ${citationNum}">[${citationNum}]</span>`;
+        }
+        return match;
+      });
+    }
 
     if (Object.keys(citations).length > 0) {
       content += this._buildReferencesSection(citations);
@@ -1769,7 +1960,7 @@ class AccessibilityManager {
     e.preventDefault();
 
     const focusableElements = this.getFocusableElements();
-    if (focusableElements.length === 0) return;
+    if (!focusableElements || focusableElements.length === 0) return;
 
     const activeElement = document.activeElement;
     const currentIndex = focusableElements.indexOf(activeElement);
@@ -2043,6 +2234,21 @@ class ChatUI {
   }
 
   /**
+   * Enables or disables the input area during API calls
+   */
+  setInputEnabled(enabled) {
+    this.elements.input.disabled = !enabled;
+    this.elements.sendBtn.setAttribute(
+      "aria-disabled",
+      enabled ? "false" : "true",
+    );
+    this.elements.sendBtn.setAttribute("tabindex", enabled ? "0" : "-1");
+    if (enabled) {
+      this.elements.input.focus();
+    }
+  }
+
+  /**
    * Gets input value
    */
   getInputValue() {
@@ -2091,34 +2297,41 @@ class ChatUI {
    * Binds event listeners
    */
   _bindEvents() {
-    this.elements.button.addEventListener("click", () => {
+    this._handlers = {};
+
+    this._handlers.buttonClick = () => {
       this.eventBus.emit("toggle");
-    });
+    };
+    this.elements.button.addEventListener("click", this._handlers.buttonClick);
 
-    this.elements.closeBtn.addEventListener("click", () => {
+    this._handlers.closeClick = () => {
       this.eventBus.emit("close");
-    });
+    };
+    this.elements.closeBtn.addEventListener("click", this._handlers.closeClick);
 
-    this.elements.clearBtn.addEventListener("click", () => {
+    this._handlers.clearClick = () => {
       this.eventBus.emit("clear");
-    });
+    };
+    this.elements.clearBtn.addEventListener("click", this._handlers.clearClick);
 
-    this.elements.sendBtn.addEventListener("click", () => {
+    this._handlers.sendClick = () => {
       if (this.elements.sendBtn.getAttribute("aria-disabled") !== "true") {
         this.eventBus.emit("send", this.getInputValue());
       }
-    });
+    };
+    this.elements.sendBtn.addEventListener("click", this._handlers.sendClick);
 
-    this.elements.input.addEventListener("keydown", (e) => {
+    this._handlers.inputKeydown = (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (this.elements.sendBtn.getAttribute("aria-disabled") !== "true") {
           this.eventBus.emit("send", this.getInputValue());
         }
       }
-    });
+    };
+    this.elements.input.addEventListener("keydown", this._handlers.inputKeydown);
 
-    this.elements.input.addEventListener("input", () => {
+    this._handlers.inputInput = () => {
       const hasText = this.elements.input.value.trim().length > 0;
       this.elements.sendBtn.setAttribute(
         "aria-disabled",
@@ -2130,10 +2343,11 @@ class ChatUI {
         () => this._autoResizeInput(),
         TIMINGS.DEBOUNCE_INPUT,
       );
-    });
+    };
+    this.elements.input.addEventListener("input", this._handlers.inputInput);
 
     // iOS keyboard handling
-    this.elements.input.addEventListener("focus", () => {
+    this._handlers.inputFocus = () => {
       setTimeout(() => {
         this.elements.input.scrollIntoView({
           behavior: "smooth",
@@ -2143,19 +2357,22 @@ class ChatUI {
           this.elements.messages.style.paddingBottom = `${SIZES.MOBILE_PADDING_BOTTOM}px`;
         }
       }, TIMINGS.IOS_KEYBOARD_DELAY);
-    });
+    };
+    this.elements.input.addEventListener("focus", this._handlers.inputFocus);
 
-    this.elements.input.addEventListener("blur", () => {
+    this._handlers.inputBlur = () => {
       if (window.innerWidth <= SIZES.MOBILE_BREAKPOINT) {
         this.elements.messages.style.paddingBottom = "";
       }
-    });
+    };
+    this.elements.input.addEventListener("blur", this._handlers.inputBlur);
 
-    document.addEventListener("keydown", (e) => {
+    this._handlers.documentEscape = (e) => {
       if (e.key === "Escape") {
         this.eventBus.emit("close");
       }
-    });
+    };
+    document.addEventListener("keydown", this._handlers.documentEscape);
   }
 
   /**
@@ -2299,6 +2516,54 @@ class ChatUI {
       this.accessibilityManager.remove();
     }
 
+    // Remove all stored event listeners
+    if (this._handlers) {
+      if (this.elements.button) {
+        this.elements.button.removeEventListener(
+          "click",
+          this._handlers.buttonClick,
+        );
+      }
+      if (this.elements.closeBtn) {
+        this.elements.closeBtn.removeEventListener(
+          "click",
+          this._handlers.closeClick,
+        );
+      }
+      if (this.elements.clearBtn) {
+        this.elements.clearBtn.removeEventListener(
+          "click",
+          this._handlers.clearClick,
+        );
+      }
+      if (this.elements.sendBtn) {
+        this.elements.sendBtn.removeEventListener(
+          "click",
+          this._handlers.sendClick,
+        );
+      }
+      if (this.elements.input) {
+        this.elements.input.removeEventListener(
+          "keydown",
+          this._handlers.inputKeydown,
+        );
+        this.elements.input.removeEventListener(
+          "input",
+          this._handlers.inputInput,
+        );
+        this.elements.input.removeEventListener(
+          "focus",
+          this._handlers.inputFocus,
+        );
+        this.elements.input.removeEventListener(
+          "blur",
+          this._handlers.inputBlur,
+        );
+      }
+      document.removeEventListener("keydown", this._handlers.documentEscape);
+      this._handlers = null;
+    }
+
     if (this.elements.button) this.elements.button.remove();
     if (this.elements.window) this.elements.window.remove();
 
@@ -2324,6 +2589,7 @@ class UniversalChatWidget {
     this.state = new ChatState(this.options);
     this.api = new ChatAPI(this.options.apiEndpoint, this.options.model, {
       debug: this.options.debug,
+      timeout: this.options.requestTimeout,
     });
     this.renderer = new MessageRenderer(this.options);
     this.ui = new ChatUI(this.options, this.eventBus);
@@ -2406,22 +2672,26 @@ class UniversalChatWidget {
   /**
    * Handles sending message
    */
-  async _handleSend(message) {
+  async _handleSend(message, isRetry = false) {
     if (!message) return;
 
-    // Add user message to state and UI
-    const history = [
-      ...this.state.get("history"),
-      { role: "user", content: message },
-    ];
-    this.state.update({ history });
+    // Guard against concurrent sends
+    if (this.state.get("isSending")) return;
+    this.state.update({ isSending: true });
+    this.ui.setInputEnabled(false);
 
-    const formatted = this.renderer.formatMessage(message);
-    const messageEl = this.ui.addMessage(
-      "user",
-      formatted,
-      this._formatTime(new Date()),
-    );
+    // Add user message to state and UI (skip if retry — already in history)
+    if (!isRetry) {
+      const history = [
+        ...this.state.get("history"),
+        { role: "user", content: message },
+      ];
+      this.state.update({ history });
+
+      const formatted = this.renderer.formatMessage(message);
+      this.ui.addMessage("user", formatted, this._formatTime(new Date()));
+    }
+
     this.ui.clearInput();
     this.ui.showTyping();
 
@@ -2489,6 +2759,9 @@ class UniversalChatWidget {
         message: "Something went wrong. Please try again.",
       };
       this.ui.showError(errorInfo.message);
+    } finally {
+      this.state.update({ isSending: false });
+      this.ui.setInputEnabled(true);
     }
   }
 
@@ -2498,7 +2771,7 @@ class UniversalChatWidget {
   async _handleRetry() {
     const message = this.state.get("lastFailedMessage");
     if (message) {
-      await this._handleSend(message);
+      await this._handleSend(message, true);
     }
   }
 
@@ -2555,41 +2828,55 @@ class UniversalChatWidget {
         "https://your-worker.workers.dev",
       model:
         ChatValidators.validateModel(options.model) || "mistral-medium-latest",
-      titleBackgroundColor: options.titleBackgroundColor || "#363D45",
-      titleFontColor: options.titleFontColor || "#FDF8ED",
+      titleBackgroundColor:
+        ChatValidators.validateColor(options.titleBackgroundColor) || "#363D45",
+      titleFontColor:
+        ChatValidators.validateColor(options.titleFontColor) || "#FDF8ED",
 
-      assistantColor: options.assistantColor || "#FCCF9C",
-      assistantFontColor: options.assistantFontColor || "#3B332B",
-      assistantMessageOpacity: options.assistantMessageOpacity || 0.9,
+      assistantColor:
+        ChatValidators.validateColor(options.assistantColor) || "#FCCF9C",
+      assistantFontColor:
+        ChatValidators.validateColor(options.assistantFontColor) || "#3B332B",
+      assistantMessageOpacity: options.assistantMessageOpacity ?? 0.9,
 
-      userColor: options.userColor || "#A7C7C6",
-      userFontColor: options.userFontColor || "#283E3D",
-      userMessageOpacity: options.userMessageOpacity || 0.9,
+      userColor:
+        ChatValidators.validateColor(options.userColor) || "#A7C7C6",
+      userFontColor:
+        ChatValidators.validateColor(options.userFontColor) || "#283E3D",
+      userMessageOpacity: options.userMessageOpacity ?? 0.9,
 
-      chatBackground: options.chatBackground || "#ffffff",
-      stampColor: options.stampColor || "#DB6B6B",
-      codeBackgroundColor: options.codeBackgroundColor || "#FFEEE2",
-      codeOpacity: options.codeOpacity || 0.9,
-      codeTextColor: options.codeTextColor || "#537E8F",
+      chatBackground:
+        ChatValidators.validateColor(options.chatBackground) || "#ffffff",
+      stampColor:
+        ChatValidators.validateColor(options.stampColor) || "#DB6B6B",
+      codeBackgroundColor:
+        ChatValidators.validateColor(options.codeBackgroundColor) || "#FFEEE2",
+      codeOpacity: options.codeOpacity ?? 0.9,
+      codeTextColor:
+        ChatValidators.validateColor(options.codeTextColor) || "#537E8F",
 
-      borderColor: options.borderColor || "#363D45",
-      buttonIconColor: options.buttonIconColor || "#363D45",
-      scrollbarColor: options.scrollbarColor || "#FDF8ED",
-      inputTextColor: options.inputTextColor || "#363D45",
+      borderColor:
+        ChatValidators.validateColor(options.borderColor) || "#363D45",
+      buttonIconColor:
+        ChatValidators.validateColor(options.buttonIconColor) || "#363D45",
+      scrollbarColor:
+        ChatValidators.validateColor(options.scrollbarColor) || "#FDF8ED",
+      inputTextColor:
+        ChatValidators.validateColor(options.inputTextColor) || "#363D45",
 
-      inputAreaOpacity: options.inputAreaOpacity || 0.95,
-      startOpen: options.startOpen || false,
-      buttonSize: options.buttonSize || SIZES.BUTTON_SIZE,
-      windowWidth: options.windowWidth || SIZES.WINDOW_WIDTH,
-      windowHeight: options.windowHeight || SIZES.WINDOW_HEIGHT,
-      showModelInfo: options.showModelInfo || false,
-      maxHistoryTokens: options.maxHistoryTokens || LIMITS.MAX_HISTORY_TOKENS,
+      inputAreaOpacity: options.inputAreaOpacity ?? 0.95,
+      startOpen: options.startOpen ?? false,
+      buttonSize: options.buttonSize ?? SIZES.BUTTON_SIZE,
+      windowWidth: options.windowWidth ?? SIZES.WINDOW_WIDTH,
+      windowHeight: options.windowHeight ?? SIZES.WINDOW_HEIGHT,
+      showModelInfo: options.showModelInfo ?? false,
+      maxHistoryTokens: options.maxHistoryTokens ?? LIMITS.MAX_HISTORY_TOKENS,
       alwaysKeepRecentMessages:
-        options.alwaysKeepRecentMessages || LIMITS.ALWAYS_KEEP_RECENT,
+        options.alwaysKeepRecentMessages ?? LIMITS.ALWAYS_KEEP_RECENT,
       maxHistoryMessages:
-        options.maxHistoryMessages || LIMITS.MAX_HISTORY_MESSAGES,
-      debug: options.debug || false,
-      ...options,
+        options.maxHistoryMessages ?? LIMITS.MAX_HISTORY_MESSAGES,
+      debug: options.debug ?? false,
+      requestTimeout: options.requestTimeout ?? 30000,
     };
   }
 
@@ -2629,9 +2916,17 @@ class UniversalChatWidget {
 document.addEventListener("DOMContentLoaded", () => {
   const autoInit = document.querySelector("[data-chat-widget]");
   if (autoInit) {
-    const options = autoInit.dataset.chatWidget
-      ? JSON.parse(autoInit.dataset.chatWidget)
-      : {};
+    let options = {};
+    try {
+      options = autoInit.dataset.chatWidget
+        ? JSON.parse(autoInit.dataset.chatWidget)
+        : {};
+    } catch (e) {
+      console.warn(
+        "Chat Widget: Invalid JSON in data-chat-widget attribute:",
+        e.message,
+      );
+    }
     window.chatWidget = new UniversalChatWidget(options);
   }
 });

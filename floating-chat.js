@@ -75,7 +75,7 @@ const TIMINGS = {
  * Size constants for UI elements (in pixels)
  */
 const SIZES = {
-  BUTTON_SIZE: 60, // Default chat button size (px)
+  BUTTON_SIZE: 90, // Default chat button size (px)
   WINDOW_WIDTH: 450, // Default window width (px)
   WINDOW_HEIGHT: 600, // Default window height (px)
   MOBILE_BREAKPOINT: 768, // Mobile/desktop breakpoint (px)
@@ -987,7 +987,9 @@ class MessageRenderer {
       if (document) {
         citationNumbers.forEach((citationNum) => {
           const docKey = citationNum.toString();
-          const docContent = document[docKey] || document[citationNum - 1];
+          const docContent = Array.isArray(document)
+            ? document[citationNum - 1]
+            : document[docKey] || document[citationNum - 1];
 
           if (docContent && typeof docContent === "string") {
             let referenceText = `<strong>${ChatValidators.escapeHtml(source.name)}</strong>`;

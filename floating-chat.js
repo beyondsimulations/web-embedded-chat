@@ -129,6 +129,10 @@ class EventBus {
     if (!this._events[event]) return;
     this._events[event] = this._events[event].filter((h) => h !== handler);
   }
+
+  clear() {
+    this._events = {};
+  }
 }
 
 /**
@@ -296,9 +300,15 @@ class ColorUtils {
    * Converts hex color to rgba format with opacity
    */
   static hexToRgba(hex, opacity) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
+    let h = hex.replace("#", "");
+    if (h.length === 3) {
+      h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    } else if (h.length === 8) {
+      h = h.slice(0, 6);
+    }
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
     return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   }
 
@@ -370,14 +380,20 @@ class ChatState {
       console.log("Client saving state with traceId:", this._state.traceId);
     }
 
-    sessionStorage.setItem("universalChatState", JSON.stringify(stateToSave));
+    const key = this._options._instanceId
+      ? `universalChatState_${this._options._instanceId}`
+      : "universalChatState";
+    sessionStorage.setItem(key, JSON.stringify(stateToSave));
   }
 
   /**
    * Restores state from sessionStorage
    */
   restore() {
-    const saved = sessionStorage.getItem("universalChatState");
+    const key = this._options._instanceId
+      ? `universalChatState_${this._options._instanceId}`
+      : "universalChatState";
+    const saved = sessionStorage.getItem(key);
     if (saved) {
       try {
         const state = JSON.parse(saved);
@@ -400,7 +416,7 @@ class ChatState {
           "Chat Widget: Failed to restore state, clearing corrupted data:",
           e.message,
         );
-        sessionStorage.removeItem("universalChatState");
+        sessionStorage.removeItem(key);
         return false;
       }
     }
@@ -578,8 +594,7 @@ class ChatAPI {
         const abortError = new Error("Request timed out or was cancelled");
         abortError.errorInfo = {
           type: "timeout",
-          message:
-            "Request timed out. The server took too long to respond.",
+          message: "Request timed out. The server took too long to respond.",
         };
         throw abortError;
       }
@@ -755,10 +770,7 @@ class MessageRenderer {
     });
 
     // Phase 2: HTML-escape the remaining text (not code)
-    processed = processed
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    processed = ChatValidators.escapeHtml(processed);
 
     // Phase 3: Apply markdown formatting
     processed = processed
@@ -767,17 +779,50 @@ class MessageRenderer {
       .replace(/^# (.*$)/gm, "<h1>$1</h1>")
       .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.*?)\*/g, "<em>$1</em>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>");
+
+    // Convert unordered lists (- item or * item at start of line)
+    processed = processed.replace(
+      /(?:^|\n)((?:[-*] .+(?:\n|$))+)/g,
+      (_match, block) => {
+        const items = block
+          .split("\n")
+          .filter((line) => /^[-*] /.test(line))
+          .map((line) => `<li>${line.replace(/^[-*] /, "")}</li>`)
+          .join("");
+        return `<ul>${items}</ul>`;
+      },
+    );
+
+    // Convert ordered lists (1. item at start of line)
+    processed = processed.replace(
+      /(?:^|\n)((?:\d+\. .+(?:\n|$))+)/g,
+      (_match, block) => {
+        const items = block
+          .split("\n")
+          .filter((line) => /^\d+\. /.test(line))
+          .map((line) => `<li>${line.replace(/^\d+\. /, "")}</li>`)
+          .join("");
+        return `<ol>${items}</ol>`;
+      },
+    );
+
+    // Auto-link URLs (skip if already inside HTML tags)
+    processed = processed.replace(
+      /(?<![="'])(https?:\/\/[^\s<>)"']+)/g,
+      '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
+    );
+
+    processed = processed
       .replace(/\n/g, "<br>")
       .replace(/(<\/h[1-6]>)<br>/g, "$1")
-      .replace(/(<\/pre>)<br>/g, "$1");
+      .replace(/(<\/pre>)<br>/g, "$1")
+      .replace(/(<\/ul>)<br>/g, "$1")
+      .replace(/(<\/ol>)<br>/g, "$1");
 
     // Phase 4: Restore code with separate HTML-escaping
     codeBlocks.forEach((code, index) => {
-      const escaped = code
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+      const escaped = ChatValidators.escapeHtml(code);
       processed = processed.replace(
         `\x00CODEBLOCK_${index}\x00`,
         `<pre><code>${escaped}</code></pre>`,
@@ -785,10 +830,7 @@ class MessageRenderer {
     });
 
     inlineCodes.forEach((code, index) => {
-      const escaped = code
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+      const escaped = ChatValidators.escapeHtml(code);
       processed = processed.replace(
         `\x00INLINECODE_${index}\x00`,
         `<code>${escaped}</code>`,
@@ -809,10 +851,7 @@ class MessageRenderer {
               ? "\\)"
               : "$";
       const restored = `${open}${block.content}${close}`;
-      processed = processed.replace(
-        `\x00LATEX_${index}\x00`,
-        () => restored,
-      );
+      processed = processed.replace(`\x00LATEX_${index}\x00`, () => restored);
     });
 
     return processed;
@@ -847,7 +886,6 @@ class MessageRenderer {
 
     let content = messageBubble.innerHTML;
     const citations = {};
-    let fallbackProcessed = false;
 
     const citationMatches = content.match(/\[(\d+)\]/g);
     const citationNumbers = citationMatches
@@ -856,41 +894,16 @@ class MessageRenderer {
 
     if (sources && sources.length > 0 && citationNumbers.length > 0) {
       this._extractCitationsFromSources(sources, citationNumbers, citations);
-    } else if (citationNumbers.length === 0 && sources && sources.length > 0) {
-      // Fallback: Parse citations from text content
-      const citationPattern = /\[(\d+)\]\s*([\s\S]*?)(?=\s*\[\d+\]|$)/g;
-      let match;
+    }
 
-      while ((match = citationPattern.exec(content)) !== null) {
-        const citationNum = parseInt(match[1]);
-        const referenceText = match[2].trim();
-
-        const cleanText = referenceText
-          .replace(/<[^>]*>/g, "")
-          .replace(/\s+/g, " ")
-          .trim();
-
-        if (cleanText.length > LIMITS.MIN_CITATION_LENGTH) {
-          citations[citationNum] = referenceText;
-
-          const replacement = `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference" role="button" tabindex="0" aria-label="View reference ${citationNum}">[${citationNum}]</span>`;
-          content = content.replace(match[0], replacement);
-          citationPattern.lastIndex = 0;
-        }
+    // Replace citation numbers with clickable links
+    content = content.replace(/\[(\d+)\]/g, (match, num) => {
+      const citationNum = parseInt(num);
+      if (citations[citationNum]) {
+        return `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference" role="button" tabindex="0" aria-label="View reference ${citationNum}">[${citationNum}]</span>`;
       }
-      fallbackProcessed = true;
-    }
-
-    // Replace citation numbers with clickable links (skip if fallback already processed)
-    if (!fallbackProcessed) {
-      content = content.replace(/\[(\d+)\]/g, (match, num) => {
-        const citationNum = parseInt(num);
-        if (citations[citationNum]) {
-          return `<span class="citation-link" data-citation="${citationNum}" title="Click to see reference" role="button" tabindex="0" aria-label="View reference ${citationNum}">[${citationNum}]</span>`;
-        }
-        return match;
-      });
-    }
+      return match;
+    });
 
     if (Object.keys(citations).length > 0) {
       content += this._buildReferencesSection(citations);
@@ -946,7 +959,15 @@ class MessageRenderer {
         autoRenderScript.src =
           "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js";
         autoRenderScript.onload = () => resolve();
+        autoRenderScript.onerror = () => {
+          console.warn("Chat Widget: Failed to load KaTeX auto-render");
+          resolve();
+        };
         document.head.appendChild(autoRenderScript);
+      };
+      script.onerror = () => {
+        console.warn("Chat Widget: Failed to load KaTeX");
+        resolve();
       };
       document.head.appendChild(script);
     });
@@ -1048,7 +1069,7 @@ class MessageRenderer {
       (a, b) => parseInt(a) - parseInt(b),
     );
     sortedNums.forEach((num) => {
-      referencesHtml += `<li id="ref-${num}" class="reference-item">${citations[num]}</li>`;
+      referencesHtml += `<li value="${num}" id="ref-${num}" class="reference-item">${citations[num]}</li>`;
     });
 
     referencesHtml += "</ol></div>";
@@ -1129,8 +1150,8 @@ class StyleGenerator {
 
   generate() {
     return `
-      ${this.generateVariables()}
       ${this.generateImports()}
+      ${this.generateVariables()}
       ${this.generateButton()}
       ${this.generateWindow()}
       ${this.generateMessages()}
@@ -1179,10 +1200,22 @@ class StyleGenerator {
   }
 
   generateImports() {
-    return `
-      @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap');
-      @import url('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css');
-    `;
+    // Inject <link> elements instead of @import for better performance
+    const links = [
+      {
+        href: "https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap",
+      },
+      { href: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" },
+    ];
+    links.forEach(({ href }) => {
+      if (!document.querySelector(`link[href="${href}"]`)) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = href;
+        document.head.appendChild(link);
+      }
+    });
+    return "";
   }
 
   generateButton() {
@@ -1314,7 +1347,7 @@ class StyleGenerator {
       .universal-chat-window.open {
         opacity: 1;
         transform: translateY(0) scale(1);
-        pointer-events: all;
+        pointer-events: auto;
       }
 
       .chat-header {
@@ -1687,6 +1720,27 @@ class StyleGenerator {
         border-radius: 3px;
         background: ${ColorUtils.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
       }
+
+      .message-bubble ul,
+      .message-bubble ol {
+        margin: 0.5rem 0;
+        padding-left: 1.5rem;
+      }
+
+      .message-bubble li {
+        margin-bottom: 0.25rem;
+      }
+
+      .message-bubble a {
+        color: var(--chat-code-fg);
+        text-decoration: underline;
+        word-break: break-all;
+      }
+
+      .message-bubble a:hover,
+      .message-bubble a:focus {
+        color: var(--chat-stamp-color);
+      }
     `;
   }
 
@@ -1772,7 +1826,6 @@ class StyleGenerator {
 
         .chat-messages {
           padding-bottom: calc(120px + env(safe-area-inset-bottom, 0));
-          -webkit-overflow-scrolling: touch;
         }
 
         .chat-input-area {
@@ -1879,6 +1932,22 @@ class StyleGenerator {
         0%, 100% { transform: scale(1); }
         50% { transform: scale(1.1); }
       }
+
+      @media (prefers-reduced-motion: reduce) {
+        .message,
+        .universal-chat-window,
+        .universal-chat-button,
+        .button-typing-indicator,
+        .button-message-preview {
+          animation: none !important;
+          transition: none !important;
+        }
+        .typing-indicator span,
+        .button-typing-indicator span {
+          animation: none !important;
+          opacity: 0.6;
+        }
+      }
     `;
   }
 
@@ -1957,6 +2026,8 @@ class AccessibilityManager {
   trapFocus(e) {
     if (e.key !== "Tab") return;
 
+    if (!this.window.contains(document.activeElement)) return;
+
     e.preventDefault();
 
     const focusableElements = this.getFocusableElements();
@@ -2031,6 +2102,7 @@ class ChatUI {
     this.rafIds = {};
     this.previewTimeout = null;
     this.accessibilityManager = null;
+    this._id = options._instanceId || "chat-0";
   }
 
   /**
@@ -2117,7 +2189,7 @@ class ChatUI {
   showTyping() {
     const typingEl = document.createElement("div");
     typingEl.className = "message assistant";
-    typingEl.id = "typing-indicator";
+    typingEl.id = `typing-indicator-${this._id}`;
     typingEl.setAttribute("role", "status");
     typingEl.setAttribute("aria-live", "polite");
     typingEl.setAttribute("aria-label", "Assistant is typing");
@@ -2131,7 +2203,7 @@ class ChatUI {
    * Hides typing indicator
    */
   hideTyping() {
-    const typingEl = document.getElementById("typing-indicator");
+    const typingEl = document.getElementById(`typing-indicator-${this._id}`);
     if (typingEl) typingEl.remove();
   }
 
@@ -2157,7 +2229,7 @@ class ChatUI {
       this.hideMessagePreview();
       const preview = document.createElement("div");
       preview.className = "button-message-preview";
-      preview.id = "message-preview";
+      preview.id = `message-preview-${this._id}`;
       const truncated =
         message.length > 60 ? message.substring(0, 60) + "..." : message;
       preview.textContent = truncated;
@@ -2173,7 +2245,7 @@ class ChatUI {
    * Hides message preview
    */
   hideMessagePreview() {
-    const preview = document.getElementById("message-preview");
+    const preview = document.getElementById(`message-preview-${this._id}`);
     if (preview) preview.remove();
     if (this.previewTimeout) clearTimeout(this.previewTimeout);
   }
@@ -2185,17 +2257,21 @@ class ChatUI {
     const errorEl = document.createElement("div");
     errorEl.className = "message error";
     errorEl.setAttribute("role", "alert");
-    errorEl.innerHTML = `
-      <div class="message-bubble">
-        ${message}
-        <br>
-        <button class="retry-btn" aria-label="Retry sending message">↻ Retry</button>
-      </div>
-    `;
+    const bubble = document.createElement("div");
+    bubble.className = "message-bubble";
+    const msgSpan = document.createElement("span");
+    msgSpan.textContent = message;
+    bubble.appendChild(msgSpan);
+    bubble.appendChild(document.createElement("br"));
+    const retryBtn = document.createElement("button");
+    retryBtn.className = "retry-btn";
+    retryBtn.setAttribute("aria-label", "Retry sending message");
+    retryBtn.textContent = "↻ Retry";
+    bubble.appendChild(retryBtn);
+    errorEl.appendChild(bubble);
     this.elements.messages.appendChild(errorEl);
     this._scrollToBottom();
 
-    const retryBtn = errorEl.querySelector(".retry-btn");
     retryBtn.addEventListener("click", async () => {
       retryBtn.disabled = true;
       retryBtn.textContent = "Retrying...";
@@ -2329,7 +2405,10 @@ class ChatUI {
         }
       }
     };
-    this.elements.input.addEventListener("keydown", this._handlers.inputKeydown);
+    this.elements.input.addEventListener(
+      "keydown",
+      this._handlers.inputKeydown,
+    );
 
     this._handlers.inputInput = () => {
       const hasText = this.elements.input.value.trim().length > 0;
@@ -2368,7 +2447,10 @@ class ChatUI {
     this.elements.input.addEventListener("blur", this._handlers.inputBlur);
 
     this._handlers.documentEscape = (e) => {
-      if (e.key === "Escape") {
+      if (
+        e.key === "Escape" &&
+        this.elements.window.classList.contains("open")
+      ) {
         this.eventBus.emit("close");
       }
     };
@@ -2389,28 +2471,21 @@ class ChatUI {
    * Ensures viewport meta tag exists
    */
   _ensureViewportMeta() {
-    let viewportMeta = document.querySelector('meta[name="viewport"]');
-
-    if (!viewportMeta) {
-      viewportMeta = document.createElement("meta");
-      viewportMeta.name = "viewport";
-      viewportMeta.content =
-        "width=device-width, initial-scale=1.0, viewport-fit=cover";
-      document.head.appendChild(viewportMeta);
-    } else if (!viewportMeta.content.includes("viewport-fit=cover")) {
-      viewportMeta.content = viewportMeta.content + ", viewport-fit=cover";
-    }
+    // No-op: the widget should not modify the host page's viewport meta tag.
+    // Mobile layout uses dvh units and safe-area-inset env() which work
+    // regardless of viewport-fit settings.
   }
 
   /**
    * Injects CSS styles
    */
   _injectStyles() {
-    if (document.getElementById("universal-chat-styles")) return;
+    const styleId = `universal-chat-styles-${this._id}`;
+    if (document.getElementById(styleId)) return;
 
     const styleGenerator = new StyleGenerator(this.options);
     const styles = document.createElement("style");
-    styles.id = "universal-chat-styles";
+    styles.id = styleId;
     styles.textContent = styleGenerator.generate();
     document.head.appendChild(styles);
   }
@@ -2461,7 +2536,7 @@ class ChatUI {
     this.elements.window.innerHTML = `
       <div class="chat-header">
         <div class="chat-header-info">
-          <h3 id="chat-title">${this.options.title}</h3>
+          <h3 id="chat-title">${ChatValidators.escapeHtml(this.options.title)}</h3>
         </div>
         <div class="chat-header-actions">
           <button class="chat-header-btn chat-clear-btn" title="Clear chat" aria-label="Clear chat history">↻</button>
@@ -2474,7 +2549,7 @@ class ChatUI {
         <div class="chat-input-container">
           <textarea
             class="chat-input"
-            placeholder="${this.options.placeholder}"
+            placeholder="${ChatValidators.escapeHtml(this.options.placeholder)}"
             maxlength="${LIMITS.MAX_MESSAGE_LENGTH}"
             rows="1"
             aria-label="Type your message. Press Enter to send, Shift+Enter for new line"
@@ -2567,7 +2642,9 @@ class ChatUI {
     if (this.elements.button) this.elements.button.remove();
     if (this.elements.window) this.elements.window.remove();
 
-    const styleEl = document.getElementById("universal-chat-styles");
+    const styleEl = document.getElementById(
+      `universal-chat-styles-${this._id}`,
+    );
     if (styleEl) styleEl.remove();
   }
 }
@@ -2580,9 +2657,15 @@ class ChatUI {
  * Universal Chat Widget - Main orchestrator class
  */
 class UniversalChatWidget {
+  static _instanceCount = 0;
+
   constructor(options = {}) {
+    // Generate unique instance ID for multi-instance support
+    this._instanceId = `chat-${UniversalChatWidget._instanceCount++}`;
+
     // Normalize and validate options
     this.options = this._normalizeOptions(options);
+    this.options._instanceId = this._instanceId;
 
     // Initialize core components
     this.eventBus = new EventBus();
@@ -2664,7 +2747,7 @@ class UniversalChatWidget {
    * Handles clearing chat
    */
   _handleClear() {
-    this.state.update({ history: [] });
+    this.state.update({ history: [], traceId: null });
     this.ui.clearMessages();
     this._showWelcomeMessage();
   }
@@ -2839,16 +2922,14 @@ class UniversalChatWidget {
         ChatValidators.validateColor(options.assistantFontColor) || "#3B332B",
       assistantMessageOpacity: options.assistantMessageOpacity ?? 0.9,
 
-      userColor:
-        ChatValidators.validateColor(options.userColor) || "#A7C7C6",
+      userColor: ChatValidators.validateColor(options.userColor) || "#A7C7C6",
       userFontColor:
         ChatValidators.validateColor(options.userFontColor) || "#283E3D",
       userMessageOpacity: options.userMessageOpacity ?? 0.9,
 
       chatBackground:
         ChatValidators.validateColor(options.chatBackground) || "#ffffff",
-      stampColor:
-        ChatValidators.validateColor(options.stampColor) || "#DB6B6B",
+      stampColor: ChatValidators.validateColor(options.stampColor) || "#DB6B6B",
       codeBackgroundColor:
         ChatValidators.validateColor(options.codeBackgroundColor) || "#FFEEE2",
       codeOpacity: options.codeOpacity ?? 0.9,
@@ -2898,10 +2979,12 @@ class UniversalChatWidget {
    * Destroys widget
    */
   destroy() {
+    this.eventBus.clear();
     this.ui.destroy();
     this.state = null;
     this.api = null;
     this.renderer = null;
+    this.eventBus = null;
 
     if (this.options.debug) {
       console.log("Chat widget destroyed and cleaned up");

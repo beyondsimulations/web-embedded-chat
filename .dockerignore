@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.example
+target
+cert.pem
+key.pem
+Dockerfile
+docker-compose.yml
+.dockerignore
+.DS_Store

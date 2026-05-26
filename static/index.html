@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telemetry Dashboard</title>
+    <link rel="stylesheet" href="/telemetry/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    <script src="/telemetry/js/lib/api.js"></script>
+    <script src="/telemetry/js/lib/charts.js"></script>
+    <script src="/telemetry/js/views/overview.js"></script>
+    <script src="/telemetry/js/views/conversations.js"></script>
+    <script src="/telemetry/js/views/analytics.js"></script>
+    <script src="/telemetry/js/views/operations.js"></script>
+    <script src="/telemetry/js/app.js"></script>
+</head>
+<body x-data>
+
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
+<!-- Screen-reader live region for dynamic status messages (see window.announce) -->
+<div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+<div class="app-layout" :class="{ collapsed: $store.ui.sidebarCollapsed }">
+
+    <!-- Mobile hamburger -->
+    <button class="mobile-hamburger" aria-label="Open navigation menu"
+            @click="$store.ui.mobileOpen = true"><span aria-hidden="true">&#9776;</span></button>
+    <!-- Sidebar backdrop (decorative — the real close control lives inside the sidebar) -->
+    <div class="sidebar-backdrop" :class="{ visible: $store.ui.mobileOpen }"
+         @click="$store.ui.mobileOpen = false" aria-hidden="true"></div>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" :class="{ 'mobile-open': $store.ui.mobileOpen }" aria-label="Primary">
+        <div class="sidebar-header">
+            <h1>TELEMETRY</h1>
+            <button class="sidebar-toggle"
+                    :aria-label="$store.ui.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+                    :aria-expanded="!$store.ui.sidebarCollapsed"
+                    @click="$store.ui.toggleSidebar()">
+                <span aria-hidden="true" x-text="$store.ui.sidebarCollapsed ? '&#9776;' : '&#10005;'"></span>
+            </button>
+        </div>
+        <ul class="nav-items">
+            <li>
+                <a class="nav-item" href="#/overview"
+                   :class="{ active: $store.router.current === 'overview' }"
+                   :aria-current="$store.router.current === 'overview' ? 'page' : null"
+                   @click="$store.ui.mobileOpen = false">
+                    <span class="icon" aria-hidden="true">&#9632;</span><span>Overview</span>
+                </a>
+            </li>
+            <li>
+                <a class="nav-item" href="#/conversations"
+                   :class="{ active: $store.router.startsWith('conversations') }"
+                   :aria-current="$store.router.startsWith('conversations') ? 'page' : null"
+                   @click="$store.ui.mobileOpen = false">
+                    <span class="icon" aria-hidden="true">&#9993;</span><span>Conversations</span>
+                </a>
+            </li>
+            <li>
+                <a class="nav-item" href="#/analytics"
+                   :class="{ active: $store.router.current === 'analytics' }"
+                   :aria-current="$store.router.current === 'analytics' ? 'page' : null"
+                   @click="$store.ui.mobileOpen = false">
+                    <span class="icon" aria-hidden="true">&#9670;</span><span>Analytics</span>
+                </a>
+            </li>
+            <li>
+                <a class="nav-item" href="#/operations"
+                   :class="{ active: $store.router.current === 'operations' }"
+                   :aria-current="$store.router.current === 'operations' ? 'page' : null"
+                   @click="$store.ui.mobileOpen = false">
+                    <span class="icon" aria-hidden="true">&#9881;</span><span>Operations</span>
+                </a>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/logout">Sign out</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="content" id="main-content" tabindex="-1">
+
+        <!-- ============ OVERVIEW ============ -->
+        <template x-if="$store.router.current === 'overview'">
+            <div x-data="overviewPage()" x-init="init()">
+                <div class="page-header">
+                    <h2>Overview</h2>
+                    <p>System-wide metrics and recent activity</p>
+                </div>
+
+                <template x-if="error">
+                    <div class="error-box" role="alert" x-text="error"></div>
+                </template>
+
+                <template x-if="loading">
+                    <div class="loading-spinner" role="status">Loading dashboard...</div>
+                </template>
+
+                <template x-if="!loading && stats">
+                    <div>
+                        <!-- Stats Cards -->
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="label">Conversations</div>
+                                <div class="value" x-text="formatNumber(stats.totalConversations)"></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="label">Messages</div>
+                                <div class="value" x-text="formatNumber(stats.totalMessages)"></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="label">Unique Users</div>
+                                <div class="value blue" x-text="formatNumber(stats.uniqueUsers)"></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="label">Total Tokens</div>
+                                <div class="value yellow" x-text="formatNumber(stats.totalTokens)"></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="label">Avg Latency</div>
+                                <div class="value" x-text="formatMs(stats.avgLatencyMs)"></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="label">Errors</div>
+                                <div class="value magenta" x-text="formatNumber(stats.errorCount)"></div>
+                            </div>
+                        </div>
+
+                        <!-- Charts -->
+                        <div class="charts-grid">
+                            <div class="card">
+                                <div class="section-title">Usage (Last 30 Days)</div>
+                                <div class="chart-container">
+                                    <canvas x-ref="usageChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="card">
+                                <div class="section-title">Models</div>
+                                <div class="chart-container">
+                                    <canvas x-ref="modelChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Conversations -->
+                        <div class="card section">
+                            <div class="section-title">Recent Conversations</div>
+                            <template x-if="recentConversations.length === 0">
+                                <div class="empty-state">No conversations yet</div>
+                            </template>
+                            <template x-if="recentConversations.length > 0">
+                                <div class="table-scroll-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>User</th>
+                                            <th>Messages</th>
+                                            <th>Tokens</th>
+                                            <th>Model</th>
+                                            <th>Latency</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="c in recentConversations" :key="c.traceId">
+                                            <tr class="clickable" tabindex="0" role="link"
+                                                :aria-label="'Open conversation from ' + timeSince(c.lastMessageAt) + ', ' + (c.modelName || 'unknown model')"
+                                                @click="goToConversation(c.traceId)"
+                                                @keydown.enter="goToConversation(c.traceId)"
+                                                @keydown.space.prevent="goToConversation(c.traceId)">
+                                                <td x-text="timeSince(c.lastMessageAt)"></td>
+                                                <td class="dim" x-text="truncate(c.userId, 12)"></td>
+                                                <td x-text="c.messageCount"></td>
+                                                <td x-text="formatNumber(c.totalTokens)"></td>
+                                                <td class="accent" x-text="c.modelName || '-'"></td>
+                                                <td x-text="formatMs(c.avgLatencyMs)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- ============ CONVERSATIONS ============ -->
+        <template x-if="$store.router.startsWith('conversations')">
+            <div x-data="conversationsPage()" x-init="init()">
+
+                <template x-if="error">
+                    <div class="error-box" role="alert" x-text="error"></div>
+                </template>
+
+                <!-- Detail View -->
+                <template x-if="showDetail">
+                    <div>
+                        <button class="back-btn" @click="backToList()"><span aria-hidden="true">&#8592;</span> Back to conversations</button>
+
+                        <template x-if="detailLoading">
+                            <div class="loading-spinner" role="status">Loading conversation...</div>
+                        </template>
+
+                        <template x-if="!detailLoading && detail">
+                            <div class="detail-layout">
+                                <!-- Chat Thread -->
+                                <div class="card">
+                                    <div class="section-title">Conversation</div>
+                                    <div class="chat-thread">
+                                        <template x-for="(log, i) in detailLogs" :key="log.id || i">
+                                            <div class="chat-bubble"
+                                                 :class="log.messageDirection === 'user' ? 'user' : 'assistant'">
+                                                <div x-html="typeof marked !== 'undefined' ? marked.parse(log.messageContent?.trim() || '', {breaks: true, gfm: true}) : (log.messageContent?.trim() || '')"></div>
+                                                <!-- Thinking / reasoning content -->
+                                                <template x-if="log.attributes?.thinking">
+                                                    <div class="expandable-section" x-data="{ open: false }">
+                                                        <button class="expandable-toggle" @click="open = !open"
+                                                                :aria-expanded="open ? 'true' : 'false'">
+                                                            <span aria-hidden="true" x-text="open ? '▾' : '▸'"></span>
+                                                            <span x-text="open ? 'Hide thinking' : 'Show thinking'"></span>
+                                                        </button>
+                                                        <pre x-show="open" class="expandable-content" x-text="log.attributes.thinking"></pre>
+                                                    </div>
+                                                </template>
+                                                <!-- Tool calls -->
+                                                <template x-if="log.attributes?.tool_calls?.length">
+                                                    <div class="expandable-section" x-data="{ open: false }">
+                                                        <button class="expandable-toggle" @click="open = !open"
+                                                                :aria-expanded="open ? 'true' : 'false'">
+                                                            <span aria-hidden="true" x-text="open ? '▾' : '▸'"></span>
+                                                            <span x-text="open ? 'Hide tool calls' : 'Tool calls (' + log.attributes.tool_calls.length + ')'"></span>
+                                                        </button>
+                                                        <div x-show="open" class="expandable-content tool-calls-list">
+                                                            <template x-for="tc in log.attributes.tool_calls">
+                                                                <div class="tool-call-entry">
+                                                                    <span class="tool-call-name" x-text="tc.name"></span>
+                                                                    <template x-if="tc.info">
+                                                                        <span class="tool-call-info" x-text="tc.info"></span>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <div class="meta">
+                                                    <span x-text="formatDate(log.timestamp)"></span>
+                                                    <template x-if="log.tokenCount">
+                                                        <span x-text="' \u00b7 ' + log.tokenCount + ' tokens'"></span>
+                                                    </template>
+                                                    <template x-if="log.latencyMs">
+                                                        <span x-text="' \u00b7 ' + formatMs(log.latencyMs)"></span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Metadata Sidebar -->
+                                <div class="card detail-sidebar">
+                                    <div class="section-title">Details</div>
+                                    <div class="info-row">
+                                        <span class="label">Trace ID</span>
+                                        <span class="value" x-text="truncate(detail.traceId, 24)"></span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="label">User ID</span>
+                                        <span class="value" x-text="truncate(detail.userId, 24)"></span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="label">Model</span>
+                                        <span class="value" x-text="detail.modelName || '-'"></span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="label">Messages</span>
+                                        <span class="value" x-text="detail.messageCount"></span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="label">Total Tokens</span>
+                                        <span class="value" x-text="formatNumber(detail.totalTokens)"></span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="label">Started</span>
+                                        <span class="value" x-text="formatDate(detail.startedAt)"></span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="label">Duration</span>
+                                        <span class="value" x-text="durationBetween(detail.startedAt, detail.lastMessageAt)"></span>
+                                    </div>
+                                    <button class="btn btn-danger" style="margin-top:16px;width:100%"
+                                            @click="deleteConversation(detail.traceId)">
+                                        Delete Conversation
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- List View -->
+                <template x-if="!showDetail">
+                    <div>
+                        <div class="page-header">
+                            <h2>Conversations</h2>
+                            <p>Browse and search all chat conversations</p>
+                        </div>
+
+                        <div class="input-group section">
+                            <label for="conversations-search" class="sr-only">Search conversations</label>
+                            <input id="conversations-search" class="input" type="text"
+                                   placeholder="Search by trace ID, user, or model..."
+                                   x-model="search" style="flex:1;">
+                        </div>
+
+                        <template x-if="loading">
+                            <div class="loading-spinner" role="status">Loading conversations...</div>
+                        </template>
+
+                        <template x-if="!loading">
+                            <div class="card">
+                                <template x-if="filteredConversations.length === 0">
+                                    <div class="empty-state">No conversations found</div>
+                                </template>
+                                <template x-if="filteredConversations.length > 0">
+                                    <div class="table-scroll-wrapper">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th role="button" tabindex="0"
+                                                    :aria-sort="sortBy === 'lastMessageAt' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                                                    @click="toggleSort('lastMessageAt')"
+                                                    @keydown.enter.prevent="toggleSort('lastMessageAt')"
+                                                    @keydown.space.prevent="toggleSort('lastMessageAt')">
+                                                    Time<span aria-hidden="true" x-text="sortIcon('lastMessageAt')"></span>
+                                                </th>
+                                                <th role="button" tabindex="0"
+                                                    :aria-sort="sortBy === 'userId' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                                                    @click="toggleSort('userId')"
+                                                    @keydown.enter.prevent="toggleSort('userId')"
+                                                    @keydown.space.prevent="toggleSort('userId')">
+                                                    User<span aria-hidden="true" x-text="sortIcon('userId')"></span>
+                                                </th>
+                                                <th role="button" tabindex="0"
+                                                    :aria-sort="sortBy === 'messageCount' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                                                    @click="toggleSort('messageCount')"
+                                                    @keydown.enter.prevent="toggleSort('messageCount')"
+                                                    @keydown.space.prevent="toggleSort('messageCount')">
+                                                    Messages<span aria-hidden="true" x-text="sortIcon('messageCount')"></span>
+                                                </th>
+                                                <th role="button" tabindex="0"
+                                                    :aria-sort="sortBy === 'totalTokens' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                                                    @click="toggleSort('totalTokens')"
+                                                    @keydown.enter.prevent="toggleSort('totalTokens')"
+                                                    @keydown.space.prevent="toggleSort('totalTokens')">
+                                                    Tokens<span aria-hidden="true" x-text="sortIcon('totalTokens')"></span>
+                                                </th>
+                                                <th role="button" tabindex="0"
+                                                    :aria-sort="sortBy === 'modelName' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                                                    @click="toggleSort('modelName')"
+                                                    @keydown.enter.prevent="toggleSort('modelName')"
+                                                    @keydown.space.prevent="toggleSort('modelName')">
+                                                    Model<span aria-hidden="true" x-text="sortIcon('modelName')"></span>
+                                                </th>
+                                                <th role="button" tabindex="0"
+                                                    :aria-sort="sortBy === 'avgLatencyMs' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                                                    @click="toggleSort('avgLatencyMs')"
+                                                    @keydown.enter.prevent="toggleSort('avgLatencyMs')"
+                                                    @keydown.space.prevent="toggleSort('avgLatencyMs')">
+                                                    Latency<span aria-hidden="true" x-text="sortIcon('avgLatencyMs')"></span>
+                                                </th>
+                                                <th>Duration</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="c in filteredConversations" :key="c.traceId">
+                                                <tr class="clickable" tabindex="0" role="link"
+                                                    :aria-label="'Open conversation from ' + formatDate(c.lastMessageAt) + ', ' + (c.modelName || 'unknown model')"
+                                                    @click="openConversation(c.traceId)"
+                                                    @keydown.enter="openConversation(c.traceId)"
+                                                    @keydown.space.prevent="openConversation(c.traceId)">
+                                                    <td x-text="formatDate(c.lastMessageAt)"></td>
+                                                    <td class="dim" x-text="truncate(c.userId, 12)"></td>
+                                                    <td x-text="c.messageCount"></td>
+                                                    <td x-text="formatNumber(c.totalTokens)"></td>
+                                                    <td class="accent" x-text="c.modelName || '-'"></td>
+                                                    <td x-text="formatMs(c.avgLatencyMs)"></td>
+                                                    <td class="dim" x-text="durationBetween(c.startedAt, c.lastMessageAt)"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- ============ ANALYTICS ============ -->
+        <template x-if="$store.router.current === 'analytics'">
+            <div x-data="analyticsPage()" x-init="init()">
+                <div class="page-header">
+                    <h2>Analytics</h2>
+                    <p>Usage patterns, latency distribution, and engagement metrics</p>
+                </div>
+
+                <template x-if="error">
+                    <div class="error-box" role="alert" x-text="error"></div>
+                </template>
+
+                <template x-if="loading">
+                    <div class="loading-spinner" role="status">Loading analytics...</div>
+                </template>
+
+                <template x-if="!loading">
+                    <div>
+                        <!-- Usage Over Time -->
+                        <div class="card section">
+                            <div class="section-header">
+                                <div class="section-title" style="margin-bottom:0">Usage Over Time</div>
+                                <div class="btn-group">
+                                    <button class="btn" :class="{ active: granularity === 'day' }" @click="changeGranularity('day')">Day</button>
+                                    <button class="btn" :class="{ active: granularity === 'week' }" @click="changeGranularity('week')">Week</button>
+                                    <button class="btn" :class="{ active: granularity === 'month' }" @click="changeGranularity('month')">Month</button>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <canvas x-ref="usageChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Heatmap + Latency -->
+                        <div class="charts-grid equal">
+                            <div class="card">
+                                <div class="section-title">Peak Hours</div>
+                                <div x-ref="heatmap" style="overflow-x: auto"></div>
+                            </div>
+                            <div class="card">
+                                <div class="section-title">Latency Distribution</div>
+                                <template x-if="latencyStats && latencyStats.percentiles">
+                                    <div class="stats-grid latency-grid">
+                                        <div class="stat-card" style="padding:10px 12px">
+                                            <div class="label">P50</div>
+                                            <div class="value" style="font-size:16px" x-text="formatMs(latencyStats.percentiles.p50)"></div>
+                                        </div>
+                                        <div class="stat-card" style="padding:10px 12px">
+                                            <div class="label">P90</div>
+                                            <div class="value yellow" style="font-size:16px" x-text="formatMs(latencyStats.percentiles.p90)"></div>
+                                        </div>
+                                        <div class="stat-card" style="padding:10px 12px">
+                                            <div class="label">P95</div>
+                                            <div class="value yellow" style="font-size:16px" x-text="formatMs(latencyStats.percentiles.p95)"></div>
+                                        </div>
+                                        <div class="stat-card" style="padding:10px 12px">
+                                            <div class="label">P99</div>
+                                            <div class="value magenta" style="font-size:16px" x-text="formatMs(latencyStats.percentiles.p99)"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div class="chart-container" style="height:200px">
+                                    <canvas x-ref="latencyChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Time to First Token -->
+                            <div class="card">
+                                <div class="section-title">Time to First Token</div>
+                                <template x-if="ttftStats && ttftStats.percentiles">
+                                    <div class="stats-grid" style="margin-bottom:12px">
+                                        <div class="stat-card" style="padding:10px 12px">
+                                            <div class="label">Avg TTFT</div>
+                                            <div class="value blue" style="font-size:16px" x-text="formatMs(ttftStats.percentiles.avg)"></div>
+                                        </div>
+                                        <div class="stat-card" style="padding:10px 12px">
+                                            <div class="label">P50</div>
+                                            <div class="value" style="font-size:16px" x-text="formatMs(ttftStats.percentiles.p50)"></div>
+                                        </div>
+                                        <div class="stat-card" style="padding:10px 12px">
+                                            <div class="label">P90</div>
+                                            <div class="value yellow" style="font-size:16px" x-text="formatMs(ttftStats.percentiles.p90)"></div>
+                                        </div>
+                                        <div class="stat-card" style="padding:10px 12px">
+                                            <div class="label">P99</div>
+                                            <div class="value magenta" style="font-size:16px" x-text="formatMs(ttftStats.percentiles.p99)"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div class="chart-container" style="height:200px">
+                                    <canvas x-ref="ttftChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Engagement + Models -->
+                        <div class="charts-grid equal">
+                            <!-- Engagement -->
+                            <div class="card">
+                                <div class="section-title">User Engagement</div>
+                                <template x-if="engagement">
+                                    <div>
+                                        <div class="stats-grid engagement-grid">
+                                            <div class="stat-card" style="padding:10px 12px">
+                                                <div class="label">Conversations</div>
+                                                <div class="value" style="font-size:18px" x-text="formatNumber(engagement.totalConversations)"></div>
+                                            </div>
+                                            <div class="stat-card" style="padding:10px 12px">
+                                                <div class="label">Unique Users</div>
+                                                <div class="value blue" style="font-size:18px" x-text="formatNumber(engagement.totalUniqueUsers)"></div>
+                                            </div>
+                                            <div class="stat-card" style="padding:10px 12px">
+                                                <div class="label">Returning</div>
+                                                <div class="value yellow" style="font-size:18px" x-text="formatNumber(engagement.returningUsers)"></div>
+                                            </div>
+                                        </div>
+                                        <div style="font-size:12px; color:var(--text-secondary);">
+                                            <div style="margin-bottom:6px;">Avg messages/conversation: <strong x-text="engagement.avgMessagesPerConversation?.toFixed(1) || '-'"></strong></div>
+                                            <div style="margin-bottom:6px;">Median messages/conversation: <strong x-text="engagement.medianMessagesPerConversation?.toFixed(1) || '-'"></strong></div>
+                                            <div>Avg conversation duration: <strong x-text="formatMs(engagement.avgConversationDurationSeconds * 1000)"></strong></div>
+                                        </div>
+                                        <template x-if="engagement.messagesPerConversationDistribution && engagement.messagesPerConversationDistribution.length">
+                                            <div style="margin-top:16px;">
+                                                <div class="section-title" style="font-size:10px">Messages per Conversation</div>
+                                                <div class="table-scroll-wrapper">
+                                                <table class="data-table">
+                                                    <thead><tr><th>Bucket</th><th>Count</th></tr></thead>
+                                                    <tbody>
+                                                        <template x-for="b in engagement.messagesPerConversationDistribution" :key="b.bucket">
+                                                            <tr>
+                                                                <td x-text="b.bucket + ' messages'"></td>
+                                                                <td class="accent" x-text="b.count"></td>
+                                                            </tr>
+                                                        </template>
+                                                    </tbody>
+                                                </table>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Model Comparison -->
+                            <div class="card">
+                                <div class="section-title">Model Comparison</div>
+                                <template x-if="models.length === 0">
+                                    <div class="empty-state">No model data</div>
+                                </template>
+                                <template x-if="models.length > 0">
+                                    <div class="table-scroll-wrapper">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Model</th>
+                                                <th>Messages</th>
+                                                <th>Tokens</th>
+                                                <th>Avg Latency</th>
+                                                <th>Conversations</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="m in models" :key="m.modelName">
+                                                <tr>
+                                                    <td class="accent" x-text="m.modelName || 'unknown'"></td>
+                                                    <td x-text="formatNumber(m.messageCount)"></td>
+                                                    <td x-text="formatNumber(m.tokenTotal)"></td>
+                                                    <td x-text="formatMs(m.avgLatencyMs)"></td>
+                                                    <td x-text="m.conversationCount"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- ============ OPERATIONS ============ -->
+        <template x-if="$store.router.current === 'operations'">
+            <div x-data="operationsPage()" x-init="init()">
+                <div class="page-header">
+                    <h2>Operations</h2>
+                    <p>Error monitoring, search, export, and maintenance</p>
+                </div>
+
+                <template x-if="error">
+                    <div class="error-box" role="alert" x-text="error"></div>
+                </template>
+
+                <template x-if="loading">
+                    <div class="loading-spinner" role="status">Loading operations...</div>
+                </template>
+
+                <template x-if="!loading">
+                    <div>
+                        <!-- Error Rate Chart -->
+                        <div class="card section">
+                            <div class="section-title">Error Rate (Last 30 Days)</div>
+                            <div class="chart-container">
+                                <canvas x-ref="errorChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Agent Health -->
+                        <div class="card section">
+                            <div class="section-title">Agent / Model Health</div>
+                            <template x-if="models.length === 0">
+                                <div class="empty-state">No model data</div>
+                            </template>
+                            <template x-if="models.length > 0">
+                                <div class="table-scroll-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Model / Slug</th>
+                                            <th>Messages</th>
+                                            <th>Total Tokens</th>
+                                            <th>Avg Latency</th>
+                                            <th>Conversations</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="m in models" :key="m.modelName">
+                                            <tr>
+                                                <td class="accent" x-text="m.modelName || 'unknown'"></td>
+                                                <td x-text="formatNumber(m.messageCount)"></td>
+                                                <td x-text="formatNumber(m.tokenTotal)"></td>
+                                                <td x-text="formatMs(m.avgLatencyMs)"></td>
+                                                <td x-text="m.conversationCount"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Search -->
+                        <div class="card section">
+                            <div class="section-title" id="fulltext-search-label">Full-Text Search</div>
+                            <div class="input-group" style="margin-bottom: 12px;">
+                                <label for="fulltext-search-input" class="sr-only">Search message content</label>
+                                <input id="fulltext-search-input" class="input" type="text"
+                                       placeholder="Search message content..."
+                                       x-model="searchQuery" @keydown.enter="doSearch()" style="flex:1;">
+                                <button class="btn primary" @click="doSearch()" :disabled="searchLoading">
+                                    <span x-text="searchLoading ? 'Searching...' : 'Search'"></span>
+                                </button>
+                            </div>
+                            <template x-if="searchResults">
+                                <div>
+                                    <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;"
+                                         x-text="searchResults.totalCount + ' results found'"></div>
+                                    <div class="table-scroll-wrapper">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Direction</th>
+                                                <th>Content</th>
+                                                <th>Trace</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="r in searchResults.results" :key="r.id">
+                                                <tr class="clickable" tabindex="0" role="link"
+                                                    :aria-label="'Open conversation, ' + r.messageDirection + ' message from ' + formatDate(r.timestamp)"
+                                                    @click="$store.router.navigate('conversations/' + r.traceId)"
+                                                    @keydown.enter="$store.router.navigate('conversations/' + r.traceId)"
+                                                    @keydown.space.prevent="$store.router.navigate('conversations/' + r.traceId)">
+                                                    <td x-text="formatDate(r.timestamp)"></td>
+                                                    <td><span class="badge" :class="r.messageDirection" x-text="r.messageDirection"></span></td>
+                                                    <td x-text="truncate(r.messageContent, 80)"></td>
+                                                    <td class="dim" x-text="truncate(r.traceId, 12)"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Export + Cleanup -->
+                        <div class="charts-grid equal">
+                            <div class="card">
+                                <div class="section-title">Export Data</div>
+                                <div class="input-group" style="margin-bottom:12px;">
+                                    <label for="export-start" style="font-size:12px; color:var(--text-dim);">From</label>
+                                    <input id="export-start" class="input" type="date" x-model="exportStart">
+                                    <label for="export-end" style="font-size:12px; color:var(--text-dim);">To</label>
+                                    <input id="export-end" class="input" type="date" x-model="exportEnd">
+                                </div>
+                                <div class="input-group" role="group" aria-label="Export format">
+                                    <div class="btn-group">
+                                        <button class="btn" :class="{ active: exportFormat === 'csv' }"
+                                                :aria-pressed="exportFormat === 'csv'"
+                                                @click="exportFormat='csv'">CSV</button>
+                                        <button class="btn" :class="{ active: exportFormat === 'json' }"
+                                                :aria-pressed="exportFormat === 'json'"
+                                                @click="exportFormat='json'">JSON</button>
+                                    </div>
+                                    <button class="btn primary" @click="doExport()">Download</button>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="section-title">Cleanup Old Logs</div>
+                                <div class="input-group" style="margin-bottom:12px;">
+                                    <label for="cleanup-before" style="font-size:12px; color:var(--text-dim);">Delete logs before</label>
+                                    <input id="cleanup-before" class="input" type="date" x-model="cleanupBefore">
+                                </div>
+                                <button class="btn danger" @click="doCleanup()" :disabled="!cleanupBefore">Delete Old Logs</button>
+                                <template x-if="cleanupResult">
+                                    <div role="status" style="margin-top:8px; font-size:12px; color:var(--accent-cyan);"
+                                         x-text="cleanupResult.deleted + ' logs deleted'"></div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+    </main>
+</div>
+
+</body>
+</html>

@@ -1,10 +1,7 @@
+/target
 .env
-_site
-.quarto
-index.qmd
-_quarto.yml
-CLAUDE.md
-/.quarto/
 .DS_Store
-
-**/*.quarto_ipynb
+*.log
+cert.pem
+key.pem
+privacy.qmd

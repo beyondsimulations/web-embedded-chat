@@ -1,0 +1,57 @@
+[package]
+name = "ChatBotBackend"
+version = "0.2.0"
+edition = "2024"
+
+[[bin]]
+name = "chatbot"
+path = "src/main.rs"
+
+[[bin]]
+name = "hash_password"
+path = "src/bin/hash_password.rs"
+
+[dependencies]
+
+# ── Web / HTTP ─────────────────────────────────────────────────────────────────
+axum              = "0.8"
+tower-http        = { version = "0.6", features = ["cors", "fs", "set-header"] }
+reqwest           = { version = "0.13", features = ["json", "stream"] }
+
+# ── Session Management ────────────────────────────────────────────────────────
+tower-sessions              = "0.14"
+tower-sessions-memory-store = "0.14"
+time                        = "0.3"
+
+# ── Password Hashing ─────────────────────────────────────────────────────────
+argon2            = "0.5"
+
+# ── Crypto ────────────────────────────────────────────────────────────────────
+sha2              = "0.10"
+
+# ── Serialization ──────────────────────────────────────────────────────────────
+serde             = { version = "1", features = ["derive"] }
+serde_json        = "1"
+
+# ── Async Runtime / Streams ───────────────────────────────────────────────────
+tokio             = { version = "1", features = ["full"] }
+futures           = "0.3"
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlx              = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json"] }
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────────
+dashmap           = "6"
+
+# ── CSV Export ──────────────────────────────────────────────────────────────────
+csv               = "1"
+
+# ── Utilities ──────────────────────────────────────────────────────────────────
+chrono            = { version = "0.4",   features = ["clock", "serde"] }
+uuid              = { version = "1",     features = ["v4", "serde"] }
+thiserror         = "2"
+dotenvy           = "0.15"
+
+# ── Observability ──────────────────────────────────────────────────────────────
+tracing                  = "0.1"
+tracing-subscriber       = { version = "0.3",  features = ["env-filter", "json"] }

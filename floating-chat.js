@@ -1,5 +1,8 @@
 // Universal Chat Widget - Works with any OpenAI-compatible API
 
+(function() {
+"use strict";
+
 // ============================================================================
 // TYPE DEFINITIONS & CONSTANTS
 // ============================================================================
@@ -10,8 +13,11 @@
  * @property {string} [title] - Chat window title
  * @property {string} [welcomeMessage] - Initial greeting message
  * @property {string} [placeholder] - Input placeholder text
+ * @property {string} [language] - UI language: "en" | "de" (default: "en")
+ * @property {string} [headerSubtitle] - Subtitle text shown below title in header (supports markdown links)
  * @property {string} [position] - Widget position: "bottom-right" | "bottom-left" | "top-right" | "top-left"
  * @property {string} apiEndpoint - API endpoint URL for chat requests (required)
+ * @property {string} [configUrl] - URL to fetch widget config from (colors, title, etc). If unreachable, widget stays hidden.
  * @property {string} [model] - AI model name
  * @property {string} [titleBackgroundColor] - Header background color
  * @property {string} [titleFontColor] - Header text color
@@ -26,15 +32,31 @@
  * @property {string} [codeBackgroundColor] - Code block background color
  * @property {number} [codeOpacity] - Code block opacity (0.0–1.0)
  * @property {string} [codeTextColor] - Code text color
- * @property {string} [borderColor] - Border color
+ * @property {string} [subtitleColor] - Subtitle text color (falls back to titleFontColor)
+ * @property {number} [subtitleFontSize] - Subtitle font size in rem (0.5–0.8, default 0.65)
+ * @property {string} [windowBorderColor] - Window frame border color
+ * @property {string} [headerBorderColor] - Header bottom border color
+ * @property {string} [assistantBubbleBorderColor] - Assistant message bubble border color
+ * @property {string} [userBubbleBorderColor] - User message bubble border color
+ * @property {string} [inputBorderColor] - Input area border color
+ * @property {string} [codeBorderColor] - Code block border color
+ * @property {string} [citationBorderColor] - Citation/reference border color
  * @property {string} [buttonIconColor] - Button icon color
  * @property {string} [scrollbarColor] - Scrollbar color
  * @property {string} [inputTextColor] - Input text color
  * @property {number} [inputAreaOpacity] - Input area opacity (0.0–1.0)
+ * @property {number} [buttonShadowIntensity] - Button shadow intensity (0.0–1.0)
+ * @property {number} [windowShadowIntensity] - Window/content shadow intensity (0.0–1.0)
+ * @property {string} [buttonInactiveColor] - Button background when chat is closed
+ * @property {string} [buttonActiveColor] - Button background when chat is open
+ * @property {string} [buttonContent] - Button content when inactive (emoji or short text, max 10 chars)
+ * @property {string} [buttonIconUrl] - URL or data URL for custom button icon (overrides buttonContent)
  * @property {boolean} [startOpen] - Auto-open chat on load
  * @property {number} [buttonSize] - Chat button size in pixels
  * @property {number} [windowWidth] - Chat window width in pixels
  * @property {number} [windowHeight] - Chat window height in pixels
+ * @property {number} [inputShadowIntensity] - Input area shadow intensity (0.0–1.0, falls back to windowShadowIntensity)
+ * @property {string|HTMLElement} [container] - CSS selector or element for inline mode mount target (default: script's parent element)
  * @property {boolean} [showModelInfo] - Display model name in UI
  * @property {number} [maxHistoryTokens] - Token budget for conversation history
  * @property {number} [alwaysKeepRecentMessages] - Recent messages to keep uncompressed
@@ -69,19 +91,24 @@ const TIMINGS = {
   COPY_SUCCESS_DURATION: 2000, // Duration for "copied" indicator
   PREVIEW_TIMEOUT: 5000, // Message preview display time
   PULSE_ANIMATION: 1500, // Pulse animation duration
+  REQUEST_TIMEOUT: 60000, // Default request timeout
+  WELCOME_DELAY_MIN: 1000, // Min delay before welcome message
+  WELCOME_DELAY_RANGE: 2000, // Random range added to welcome delay
 };
 
 /**
  * Size constants for UI elements (in pixels)
  */
 const SIZES = {
-  BUTTON_SIZE: 90, // Default chat button size (px)
+  BUTTON_SIZE: 60, // Default chat button size (px)
   WINDOW_WIDTH: 450, // Default window width (px)
-  WINDOW_HEIGHT: 600, // Default window height (px)
+  WINDOW_HEIGHT: 800, // Default window height (px)
   MOBILE_BREAKPOINT: 768, // Mobile/desktop breakpoint (px)
   MOBILE_PADDING_BOTTOM: 180, // Mobile keyboard padding (px)
   SCROLLBAR_WIDTH: 6, // Scrollbar width (px)
   INPUT_MAX_HEIGHT: 100, // Max input field height (px)
+  MAX_BORDER_RADIUS: 12, // Max border radius (px)
+  WIDGET_MARGIN: 20, // Widget margin from viewport edge (px)
 };
 
 /**
@@ -90,7 +117,7 @@ const SIZES = {
 const LIMITS = {
   MAX_MESSAGE_LENGTH: 2000, // Max characters per message
   MAX_HISTORY_MESSAGES: 100, // Hard limit on stored messages
-  MAX_HISTORY_TOKENS: 4000, // Token budget for API context
+  MAX_HISTORY_TOKENS: 8000, // Token budget for API context
   ALWAYS_KEEP_RECENT: 10, // Recent messages never compressed
   SOURCE_NAME_LENGTH: 500, // Max source name length
   SOURCE_DESC_LENGTH: 1000, // Max source description length
@@ -102,6 +129,119 @@ const LIMITS = {
   MODEL_NAME_LENGTH: 50, // Max model name length
   CHARS_PER_TOKEN: 4, // Approximate chars per token
 };
+
+/**
+ * Cached date/time formatter for _formatTime (avoids creating Intl object per call)
+ */
+const _timeFormatter = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+/**
+ * Pre-compiled regex for CSS named color validation (used by ChatValidators.validateColor)
+ */
+const NAMED_COLORS_RE =
+  /^(transparent|currentColor|aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgr[ae]y|darkgreen|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategr[ae]y|darkturquoise|darkviolet|deeppink|deepskyblue|dimgr[ae]y|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gr[ae]y|green|greenyellow|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgr[ae]y|lightgreen|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategr[ae]y|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|rebeccapurple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategr[ae]y|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)$/i;
+
+/**
+ * Translation dictionaries for supported languages
+ */
+const TRANSLATIONS = {
+  en: {
+    title: "Course Assistant",
+    welcomeMessage: "Hello! How can I help you today?",
+    placeholder: "Type your question...",
+    send: "Send",
+    clearChat: "Clear chat",
+    clearChatHistory: "Clear chat history",
+    minimize: "Minimize",
+    closeChat: "Close chat",
+    copyCode: "Copy code",
+    references: "References:",
+    retry: "↻ Retry",
+    retrying: "Retrying...",
+    retryAriaLabel: "Retry sending message",
+    senderYou: "You",
+    senderAssistant: "Assistant",
+    assistantTyping: "Assistant is typing",
+    errorNetwork: "🔌 Connection lost. Check your internet and try again.",
+    errorTimeout: "Request timed out. The server took too long to respond.",
+    errorRateLimit: "Too many requests. Please wait a moment and try again.",
+    errorServer: "Server error. The service is temporarily unavailable.",
+    errorAuth: "Authentication error. Please check your API configuration.",
+    errorClient: "❌ Invalid request. Please try again.",
+    errorUnknown: "Something went wrong. Please try again.",
+    errorStreamLost: "Connection lost during response.",
+    charLimit: `Maximum ${LIMITS.MAX_MESSAGE_LENGTH} characters`,
+    keyboardHints: "Keyboard shortcuts: Enter to send, Shift+Enter for new line, Escape to close chat",
+    inputAriaLabel: "Type your message. Press Enter to send, Shift+Enter for new line",
+    sendAriaLabel: "Send message (Enter)",
+    openChat: "Open chat (Enter)",
+    closeChat: "Close chat (Escape)",
+    openChatAriaLabel: "Open chat. Press Enter to open, Escape to close",
+    closeChatAriaLabel: "Close chat. Press Escape or Enter to close",
+    chatConversation: "Chat conversation",
+    unreadMessages: "unread",
+    newMessageAnnouncement: "New message from assistant",
+    messageFrom: "Message from",
+    sentAt: "sent at",
+    chat: "Chat",
+    privateMode: "Private Mode",
+    privatePlaceholder: "Type a private message...",
+    privateModeOn: "Private mode is on",
+    privateModeOff: "Private mode is off",
+  },
+  de: {
+    title: "Kurs-Assistent",
+    welcomeMessage: "Hallo! Wie kann ich Ihnen helfen?",
+    placeholder: "Ihre Frage eingeben...",
+    send: "Senden",
+    clearChat: "Chat löschen",
+    clearChatHistory: "Chatverlauf löschen",
+    minimize: "Minimieren",
+    closeChat: "Chat schließen",
+    copyCode: "Code kopieren",
+    references: "Referenzen:",
+    retry: "↻ Erneut versuchen",
+    retrying: "Wird wiederholt...",
+    retryAriaLabel: "Nachricht erneut senden",
+    senderYou: "Sie",
+    senderAssistant: "Assistent",
+    assistantTyping: "Assistent schreibt",
+    errorNetwork: "🔌 Verbindung unterbrochen. Überprüfen Sie Ihre Internetverbindung.",
+    errorTimeout: "Zeitüberschreitung. Der Server hat zu lange gebraucht.",
+    errorRateLimit: "Zu viele Anfragen. Bitte warten Sie einen Moment.",
+    errorServer: "Serverfehler. Der Dienst ist vorübergehend nicht verfügbar.",
+    errorAuth: "Authentifizierungsfehler. Bitte überprüfen Sie Ihre API-Konfiguration.",
+    errorClient: "❌ Ungültige Anfrage. Bitte versuchen Sie es erneut.",
+    errorUnknown: "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+    errorStreamLost: "Verbindung während der Antwort verloren.",
+    charLimit: `Maximal ${LIMITS.MAX_MESSAGE_LENGTH} Zeichen`,
+    keyboardHints: "Tastenkürzel: Enter zum Senden, Umschalt+Enter für neue Zeile, Escape zum Schließen",
+    inputAriaLabel: "Nachricht eingeben. Enter zum Senden, Umschalt+Enter für neue Zeile",
+    sendAriaLabel: "Nachricht senden (Enter)",
+    openChat: "Chat öffnen (Enter)",
+    closeChat: "Chat schließen (Escape)",
+    openChatAriaLabel: "Chat öffnen. Enter zum Öffnen, Escape zum Schließen",
+    closeChatAriaLabel: "Chat schließen. Escape oder Enter zum Schließen",
+    chatConversation: "Chat-Unterhaltung",
+    unreadMessages: "ungelesen",
+    newMessageAnnouncement: "Neue Nachricht vom Assistenten",
+    messageFrom: "Nachricht von",
+    sentAt: "gesendet um",
+    chat: "Chat",
+    privateMode: "Privater Modus",
+    privatePlaceholder: "Private Nachricht eingeben...",
+    privateModeOn: "Privater Modus ist aktiv",
+    privateModeOff: "Privater Modus ist deaktiviert",
+  },
+};
+
+/**
+ * Looks up a translation string by key for the given language.
+ * Falls back to English, then returns the key itself.
+ */
+function _t(lang, key) {
+  return TRANSLATIONS[lang]?.[key] || TRANSLATIONS.en[key] || key;
+}
 
 // ============================================================================
 // UTILITY CLASSES
@@ -165,7 +305,7 @@ class ChatValidators {
       console.warn("Chat Widget: Model name - Expected string");
       return null;
     }
-    if (!/^[a-zA-Z0-9\-_.]+$/.test(model)) {
+    if (!/^[a-zA-Z0-9\-_.:]+$/.test(model)) {
       console.warn("Chat Widget: Model name - Pattern validation failed");
       return null;
     }
@@ -218,6 +358,12 @@ class ChatValidators {
                 )
               : "",
           };
+          if (
+            sourceData.source.url &&
+            typeof sourceData.source.url === "string"
+          ) {
+            sanitized.source.url = sourceData.source.url.substring(0, 2000);
+          }
         }
 
         if (sourceData.document) {
@@ -239,41 +385,24 @@ class ChatValidators {
    */
   static validateColor(color) {
     if (!color || typeof color !== "string") return null;
-    const trimmed = color.trim();
+    const c = color.trim();
 
     // Allow hex colors: #rgb, #rrggbb, #rrggbbaa
-    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed)) {
-      return trimmed;
-    }
+    if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c)) return c;
 
-    // Allow rgb/rgba
-    if (
-      /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+))?\s*\)$/.test(
-        trimmed,
-      )
-    ) {
-      return trimmed;
-    }
+    // Allow rgb/rgba/hsl/hsla with strict format validation
+    if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+))?\s*\)$/i.test(c)) return c;
+    if (/^hsla?\(\s*\d{1,3}\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%\s*(,\s*(0|1|0?\.\d+))?\s*\)$/i.test(c)) return c;
 
-    // Allow hsl/hsla
-    if (
-      /^hsla?\(\s*\d{1,3}\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%\s*(,\s*(0|1|0?\.\d+))?\s*\)$/.test(
-        trimmed,
-      )
-    ) {
-      return trimmed;
-    }
+    // Use CSS.supports for named colors and other valid CSS color values
+    if (typeof CSS !== "undefined" && CSS.supports && CSS.supports("color", c)) return c;
 
-    // Allow named CSS colors and keywords
-    const namedColors =
-      /^(transparent|currentColor|aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgr[ae]y|darkgreen|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategr[ae]y|darkturquoise|darkviolet|deeppink|deepskyblue|dimgr[ae]y|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gr[ae]y|green|greenyellow|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgr[ae]y|lightgreen|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategr[ae]y|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|rebeccapurple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategr[ae]y|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)$/i;
-    if (namedColors.test(trimmed)) {
-      return trimmed;
-    }
+    // Fallback for environments without CSS.supports
+    if (NAMED_COLORS_RE.test(c)) return c;
 
     console.warn(
       "Chat Widget: Color value rejected - unrecognized format:",
-      trimmed,
+      c,
     );
     return null;
   }
@@ -300,6 +429,9 @@ class ColorUtils {
    * Converts hex color to rgba format with opacity
    */
   static hexToRgba(hex, opacity) {
+    if (!hex || !hex.startsWith("#")) {
+      return ColorUtils.getColorWithOpacity(hex, opacity);
+    }
     let h = hex.replace("#", "");
     if (h.length === 3) {
       h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
@@ -319,6 +451,81 @@ class ColorUtils {
     const transparentPercent = (1 - opacity) * 100;
     return `color-mix(in srgb, ${color}, transparent ${transparentPercent}%)`;
   }
+
+  /**
+   * Scales shadow opacity by intensity multiplier
+   */
+  static scaledShadow(shadow, intensity) {
+    return shadow.replace(
+      /rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/,
+      (_, r, g, b, a) =>
+        `rgba(${r}, ${g}, ${b}, ${(parseFloat(a) * intensity).toFixed(3)})`,
+    );
+  }
+
+  /**
+   * Computes WCAG 2.1 contrast ratio between two hex colors.
+   * Returns null if either color is not a valid hex format.
+   */
+  static contrastRatio(hex1, hex2) {
+    const parse = (hex) => {
+      if (!hex || !hex.startsWith('#')) return null;
+      const m = hex.replace("#", "").match(/^([0-9a-f]{6}|[0-9a-f]{3})$/i);
+      if (!m) return null;
+      let h = m[1];
+      if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+      const r = parseInt(h.slice(0, 2), 16) / 255;
+      const g = parseInt(h.slice(2, 4), 16) / 255;
+      const b = parseInt(h.slice(4, 6), 16) / 255;
+      const ch = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+    };
+    const c1 = parse(hex1);
+    const c2 = parse(hex2);
+    if (c1 == null || c2 == null) return null;
+    const [a, b] = c1 > c2 ? [c1, c2] : [c2, c1];
+    return (a + 0.05) / (b + 0.05);
+  }
+
+  /**
+   * Warns in the console if configured foreground/background color pairs
+   * do not meet WCAG AA (4.5:1 for body text). Developer-facing; does not
+   * block rendering.
+   */
+  static warnLowContrast(options) {
+    const pairs = [
+      ["Title", options.titleFontColor, options.titleBackgroundColor],
+      ["Assistant message", options.assistantFontColor, options.assistantColor],
+      ["User message", options.userFontColor, options.userColor],
+      ["Input", options.inputTextColor, options.chatBackground],
+    ];
+    for (const [label, fg, bg] of pairs) {
+      if (!fg || !bg) continue;
+      const ratio = ColorUtils.contrastRatio(fg, bg);
+      if (ratio != null && ratio < 4.5) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[ChatWidget] ${label} contrast ${ratio.toFixed(2)}:1 fails WCAG 2.1 AA (4.5:1 required for body text). fg=${fg} bg=${bg}`,
+        );
+      }
+    }
+  }
+}
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+/**
+ * Renders simple markdown to HTML (only [text](url) links with https).
+ * Escapes HTML first to prevent XSS, then converts markdown links.
+ */
+function _renderSimpleMarkdown(text) {
+  const escaped = ChatValidators.escapeHtml(text);
+  return escaped.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+  );
 }
 
 // ============================================================================
@@ -336,11 +543,16 @@ class ChatState {
       unreadCount: 0,
       hasInteracted: false,
       traceId: null,
+      sessionId: null,
       lastFailedMessage: null,
       isSending: false,
+      privateMode: false,
     };
     this._listeners = new Set();
     this._options = options;
+    this._storageKey = this._options._instanceId
+      ? `universalChatState_${this._options._instanceId}`
+      : "universalChatState";
   }
 
   get(key) {
@@ -374,26 +586,22 @@ class ChatState {
       history: this._state.history,
       hasInteracted: this._state.hasInteracted,
       traceId: this._state.traceId,
+      sessionId: this._state.sessionId,
+      privateMode: this._state.privateMode,
     };
 
     if (this._options.debug) {
-      console.log("Client saving state with traceId:", this._state.traceId);
+      console.log("Client saving state with traceId:", this._state.traceId, "sessionId:", this._state.sessionId);
     }
 
-    const key = this._options._instanceId
-      ? `universalChatState_${this._options._instanceId}`
-      : "universalChatState";
-    sessionStorage.setItem(key, JSON.stringify(stateToSave));
+    sessionStorage.setItem(this._storageKey, JSON.stringify(stateToSave));
   }
 
   /**
    * Restores state from sessionStorage
    */
   restore() {
-    const key = this._options._instanceId
-      ? `universalChatState_${this._options._instanceId}`
-      : "universalChatState";
-    const saved = sessionStorage.getItem(key);
+    const saved = sessionStorage.getItem(this._storageKey);
     if (saved) {
       try {
         const state = JSON.parse(saved);
@@ -401,12 +609,16 @@ class ChatState {
           history: state.history || [],
           hasInteracted: state.hasInteracted || false,
           traceId: state.traceId || null,
+          sessionId: state.sessionId || null,
+          privateMode: state.privateMode || false,
         });
 
         if (this._options.debug) {
           console.log(
             "Client restored traceId from sessionStorage:",
             this._state.traceId,
+            "sessionId:",
+            this._state.sessionId,
           );
         }
 
@@ -416,7 +628,7 @@ class ChatState {
           "Chat Widget: Failed to restore state, clearing corrupted data:",
           e.message,
         );
-        sessionStorage.removeItem(key);
+        sessionStorage.removeItem(this._storageKey);
         return false;
       }
     }
@@ -539,8 +751,20 @@ class ChatAPI {
     this.endpoint = endpoint;
     this.model = model;
     this.debug = options.debug || false;
-    this.timeout = options.timeout || 30000;
+    this.timeout = options.timeout || TIMINGS.REQUEST_TIMEOUT;
+    this.lang = options.language || "en";
     this._currentController = null;
+  }
+
+  /**
+   * Builds the request body for chat API calls
+   */
+  _buildBody(message, history, traceId, sessionId, privateMode, stream = false) {
+    const body = { message, history, model: this.model, traceId };
+    if (stream) body.stream = true;
+    if (sessionId) body.sessionId = sessionId;
+    if (privateMode) body.privateMode = true;
+    return body;
   }
 
   /**
@@ -556,7 +780,7 @@ class ChatAPI {
   /**
    * Sends message to API and returns response
    */
-  async sendMessage(message, history, traceId) {
+  async sendMessage(message, history, traceId, sessionId, privateMode) {
     this.cancel();
 
     const controller = new AbortController();
@@ -564,19 +788,14 @@ class ChatAPI {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     if (this.debug) {
-      console.log("Client sending traceId:", traceId);
+      console.log("Client sending traceId:", traceId, "sessionId:", sessionId);
     }
 
     try {
       const response = await fetch(this.endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          history,
-          model: this.model,
-          traceId,
-        }),
+        body: JSON.stringify(this._buildBody(message, history, traceId, sessionId, privateMode)),
         signal: controller.signal,
       });
 
@@ -599,6 +818,101 @@ class ChatAPI {
         throw abortError;
       }
       throw error;
+    } finally {
+      if (this._currentController === controller) {
+        this._currentController = null;
+      }
+    }
+  }
+
+  /**
+   * Sends message via streaming SSE and dispatches events via callbacks
+   */
+  async sendMessageStreaming(message, history, traceId, sessionId, privateMode, callbacks) {
+    this.cancel();
+
+    const controller = new AbortController();
+    this._currentController = controller;
+    // First-byte timeout: abort if no data arrives within timeout period
+    let firstByteReceived = false;
+    const timeoutId = setTimeout(() => {
+      if (!firstByteReceived) controller.abort();
+    }, this.timeout);
+
+    try {
+      const response = await fetch(this.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(this._buildBody(message, history, traceId, sessionId, privateMode, true)),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let data = {};
+        try { data = await response.json(); } catch (_) {}
+        throw this._createError(data.error || "Request failed", response);
+      }
+
+      // Read SSE stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let currentEvent = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        firstByteReceived = true;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete lines
+        const lines = buffer.split("\n");
+        buffer = lines.pop(); // keep incomplete last line in buffer
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("event:")) {
+            currentEvent = trimmed.slice(6).trim();
+          } else if (trimmed.startsWith("data:")) {
+            const dataStr = trimmed.slice(5).trim();
+            if (dataStr === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(dataStr);
+              const eventName = currentEvent || "message";
+
+              if (eventName === "delta" && parsed.content) {
+                callbacks.onDelta?.(parsed.content);
+              } else if (eventName === "sources" && parsed.sources) {
+                callbacks.onSources?.(parsed.sources);
+              } else if (eventName === "done") {
+                callbacks.onDone?.(parsed);
+              } else if (eventName === "error") {
+                callbacks.onError?.(new Error(parsed.error || "Stream error"));
+              }
+            } catch (_) {
+              // Skip malformed JSON lines
+            }
+            currentEvent = null;
+          } else if (trimmed === "") {
+            currentEvent = null;
+          }
+        }
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === "AbortError") {
+        const abortError = new Error("Request timed out or was cancelled");
+        abortError.errorInfo = {
+          type: "timeout",
+          message: "Request timed out. The server took too long to respond.",
+        };
+        callbacks.onError?.(abortError);
+        return;
+      }
+      callbacks.onError?.(error);
     } finally {
       if (this._currentController === controller) {
         this._currentController = null;
@@ -639,6 +953,7 @@ class ChatAPI {
       content,
       sources: ChatValidators.validateSources(sources),
       traceId: data.traceId,
+      sessionId: data.sessionId,
       model: data.model,
     };
   }
@@ -657,51 +972,31 @@ class ChatAPI {
    * Detects and categorizes error type
    */
   _detectErrorType(error, response) {
+    const lang = this.lang;
     if (error.name === "TypeError" && error.message.includes("fetch")) {
-      return {
-        type: "network",
-        message: "🔌 Connection lost. Check your internet and try again.",
-      };
+      return { type: "network", message: _t(lang, "errorNetwork") };
     }
 
     if (error.name === "AbortError") {
-      return {
-        type: "timeout",
-        message: "Request timed out. The server took too long to respond.",
-      };
+      return { type: "timeout", message: _t(lang, "errorTimeout") };
     }
 
     if (response) {
       if (response.status === 429) {
-        return {
-          type: "ratelimit",
-          message: "Too many requests. Please wait a moment and try again.",
-        };
+        return { type: "ratelimit", message: _t(lang, "errorRateLimit") };
       }
       if (response.status >= 500) {
-        return {
-          type: "server",
-          message: "Server error. The service is temporarily unavailable.",
-        };
+        return { type: "server", message: _t(lang, "errorServer") };
       }
       if (response.status === 401 || response.status === 403) {
-        return {
-          type: "auth",
-          message: "Authentication error. Please check your API configuration.",
-        };
+        return { type: "auth", message: _t(lang, "errorAuth") };
       }
       if (response.status >= 400) {
-        return {
-          type: "client",
-          message: "❌ Invalid request. Please try again.",
-        };
+        return { type: "client", message: _t(lang, "errorClient") };
       }
     }
 
-    return {
-      type: "unknown",
-      message: "Something went wrong. Please try again.",
-    };
+    return { type: "unknown", message: _t(lang, "errorUnknown") };
   }
 }
 
@@ -715,166 +1010,29 @@ class ChatAPI {
 class MessageRenderer {
   constructor(options) {
     this.options = options;
-    this._katexLoaded = null;
+    this._rendererLoaded = null;
+    this._md = null;
   }
 
   /**
    * Formats message from markdown to HTML
    */
   formatMessage(content) {
-    // Phase 1: Extract code blocks and inline code into placeholders
-    const codeBlocks = [];
-    const inlineCodes = [];
-
-    let processed = content.replace(/```([\s\S]*?)```/g, (_match, code) => {
-      const index = codeBlocks.length;
-      codeBlocks.push(code);
-      return `\x00CODEBLOCK_${index}\x00`;
-    });
-
-    processed = processed.replace(/`([^`]+)`/g, (_match, code) => {
-      const index = inlineCodes.length;
-      inlineCodes.push(code);
-      return `\x00INLINECODE_${index}\x00`;
-    });
-
-    // Extract LaTeX expressions into placeholders (order matters: $$ before $)
-    const latexBlocks = [];
-
-    // Display math: $$...$$ (may span multiple lines)
-    processed = processed.replace(/\$\$([\s\S]*?)\$\$/g, (_match, latex) => {
-      const index = latexBlocks.length;
-      latexBlocks.push({ content: latex, display: true, delim: "$$" });
-      return `\x00LATEX_${index}\x00`;
-    });
-
-    // Display math: \[...\] (may span multiple lines)
-    processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (_match, latex) => {
-      const index = latexBlocks.length;
-      latexBlocks.push({ content: latex, display: true, delim: "\\[" });
-      return `\x00LATEX_${index}\x00`;
-    });
-
-    // Inline math: \(...\)
-    processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_match, latex) => {
-      const index = latexBlocks.length;
-      latexBlocks.push({ content: latex, display: false, delim: "\\(" });
-      return `\x00LATEX_${index}\x00`;
-    });
-
-    // Inline math: $...$ (single line only, non-greedy)
-    processed = processed.replace(/\$([^\$\n]+?)\$/g, (_match, latex) => {
-      const index = latexBlocks.length;
-      latexBlocks.push({ content: latex, display: false, delim: "$" });
-      return `\x00LATEX_${index}\x00`;
-    });
-
-    // Phase 2: HTML-escape the remaining text (not code)
-    processed = ChatValidators.escapeHtml(processed);
-
-    // Phase 3: Apply markdown formatting
-    processed = processed
-      .replace(/^### (.*$)/gm, "<h3>$1</h3>")
-      .replace(/^## (.*$)/gm, "<h2>$1</h2>")
-      .replace(/^# (.*$)/gm, "<h1>$1</h1>")
-      .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.*?)\*/g, "<em>$1</em>");
-
-    // Convert unordered lists (- item or * item at start of line)
-    processed = processed.replace(
-      /(?:^|\n)((?:[-*] .+(?:\n|$))+)/g,
-      (_match, block) => {
-        const items = block
-          .split("\n")
-          .filter((line) => /^[-*] /.test(line))
-          .map((line) => `<li>${line.replace(/^[-*] /, "")}</li>`)
-          .join("");
-        return `<ul>${items}</ul>`;
-      },
-    );
-
-    // Convert ordered lists (1. item at start of line)
-    processed = processed.replace(
-      /(?:^|\n)((?:\d+\. .+(?:\n|$))+)/g,
-      (_match, block) => {
-        const items = block
-          .split("\n")
-          .filter((line) => /^\d+\. /.test(line))
-          .map((line) => `<li>${line.replace(/^\d+\. /, "")}</li>`)
-          .join("");
-        return `<ol>${items}</ol>`;
-      },
-    );
-
-    // Auto-link URLs (skip if already inside HTML tags)
-    processed = processed.replace(
-      /(?<![="'])(https?:\/\/[^\s<>)"']+)/g,
-      '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
-    );
-
-    processed = processed
-      .replace(/\n/g, "<br>")
-      .replace(/(<\/h[1-6]>)<br>/g, "$1")
-      .replace(/(<\/pre>)<br>/g, "$1")
-      .replace(/(<\/ul>)<br>/g, "$1")
-      .replace(/(<\/ol>)<br>/g, "$1");
-
-    // Phase 4: Restore code with separate HTML-escaping
-    codeBlocks.forEach((code, index) => {
-      const escaped = ChatValidators.escapeHtml(code);
-      processed = processed.replace(
-        `\x00CODEBLOCK_${index}\x00`,
-        `<pre><code>${escaped}</code></pre>`,
-      );
-    });
-
-    inlineCodes.forEach((code, index) => {
-      const escaped = ChatValidators.escapeHtml(code);
-      processed = processed.replace(
-        `\x00INLINECODE_${index}\x00`,
-        `<code>${escaped}</code>`,
-      );
-    });
-
-    // Restore LaTeX expressions WITHOUT HTML escaping (KaTeX needs raw syntax)
-    // Note: Use a replacer function to avoid $$ being treated as a special
-    // replacement pattern by String.prototype.replace()
-    latexBlocks.forEach((block, index) => {
-      const open = block.delim;
-      const close =
-        open === "$$"
-          ? "$$"
-          : open === "\\["
-            ? "\\]"
-            : open === "\\("
-              ? "\\)"
-              : "$";
-      const restored = `${open}${block.content}${close}`;
-      processed = processed.replace(`\x00LATEX_${index}\x00`, () => restored);
-    });
-
-    return processed;
-  }
-
-  /**
-   * Renders LaTeX mathematical expressions
-   */
-  async renderLatex(messageElement) {
-    await this._loadKaTeX();
-
-    if (window.renderMathInElement) {
-      window.renderMathInElement(messageElement, {
-        delimiters: [
-          { left: "$$", right: "$$", display: true },
-          { left: "$", right: "$", display: false },
-          { left: "\\[", right: "\\]", display: true },
-          { left: "\\(", right: "\\)", display: false },
-        ],
-        throwOnError: false,
-        errorColor: this.options.stampColor,
-      });
+    if (this._md) {
+      // LLMs sometimes use $\n...\n$ for display math — normalize to $$
+      content = content.replace(/(?<!\$)\$\n([\s\S]+?)\n\$(?!\$)/g, (_, inner) => `$$\n${inner}\n$$`);
+      // LLMs often output $ f(x) $ with spaces — texmath requires no spaces after/before $.
+      // Convert to \(...\) only when content contains LaTeX markers to avoid currency false-matches.
+      content = content.replace(/(?<!\$)\$ +((?:[^$]*?[\\^_{}])[^$]*?) +\$(?!\$)/g, (_, inner) => `\\(${inner.trim()}\\)`);
+      try {
+        return this._md.render(content);
+      } catch (e) {
+        console.warn("Chat Widget: Math render failed, falling back to plain markdown", e);
+      }
     }
+    // Fallback: plain markdown without math, or basic HTML escaping
+    if (this._plainMd) return this._plainMd.render(content);
+    return ChatValidators.escapeHtml(content).replace(/\n/g, "<br>");
   }
 
   /**
@@ -921,7 +1079,7 @@ class MessageRenderer {
       const copyBtn = document.createElement("button");
       copyBtn.className = "code-copy-btn";
       copyBtn.textContent = "⧉";
-      copyBtn.setAttribute("aria-label", "Copy code");
+      copyBtn.setAttribute("aria-label", _t(this.options.language, "copyCode"));
 
       copyBtn.addEventListener("click", async () => {
         const codeContent = codeBlock.querySelector("code") || codeBlock;
@@ -940,39 +1098,53 @@ class MessageRenderer {
   }
 
   /**
-   * Loads KaTeX library
+   * Loads markdown-it + KaTeX + texmath for integrated markdown + math rendering
    */
-  _loadKaTeX() {
-    if (this._katexLoaded) return this._katexLoaded;
+  _loadRenderer() {
+    if (this._rendererLoaded) return this._rendererLoaded;
 
-    this._katexLoaded = new Promise((resolve) => {
-      if (window.katex) {
-        resolve();
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.src =
-        "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js";
-      script.onload = () => {
-        const autoRenderScript = document.createElement("script");
-        autoRenderScript.src =
-          "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js";
-        autoRenderScript.onload = () => resolve();
-        autoRenderScript.onerror = () => {
-          console.warn("Chat Widget: Failed to load KaTeX auto-render");
-          resolve();
-        };
-        document.head.appendChild(autoRenderScript);
-      };
-      script.onerror = () => {
-        console.warn("Chat Widget: Failed to load KaTeX");
+    const loadScript = (src, check) => new Promise((resolve) => {
+      if (check && check()) { resolve(); return; }
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = () => {
+        console.warn(`Chat Widget: Failed to load ${src}`);
         resolve();
       };
-      document.head.appendChild(script);
+      document.head.appendChild(s);
     });
 
-    return this._katexLoaded;
+    this._rendererLoaded = loadScript(
+      "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js",
+      () => window.katex
+    )
+      .then(() => loadScript(
+        "https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js",
+        () => window.markdownit
+      ))
+      .then(() => loadScript(
+        "https://cdn.jsdelivr.net/npm/markdown-it-texmath/texmath.min.js",
+        () => window.texmath
+      ))
+      .then(() => {
+        // Always create a plain markdown fallback (no math) for graceful degradation
+        if (window.markdownit) {
+          this._plainMd = window.markdownit({ breaks: true });
+        }
+        if (window.markdownit && window.texmath && window.katex) {
+          this._md = window.markdownit({ breaks: true })
+            .use(window.texmath, {
+              engine: window.katex,
+              delimiters: ["dollars", "brackets", "beg_end"],
+              katexOptions: { throwOnError: false, errorColor: this.options.stampColor },
+            });
+        } else if (window.markdownit) {
+          this._md = window.markdownit({ breaks: true });
+        }
+      });
+
+    return this._rendererLoaded;
   }
 
   /**
@@ -992,28 +1164,19 @@ class MessageRenderer {
             : document[docKey] || document[citationNum - 1];
 
           if (docContent && typeof docContent === "string") {
-            let referenceText = `<strong>${ChatValidators.escapeHtml(source.name)}</strong>`;
-            if (source.description) {
-              referenceText += ` - ${ChatValidators.escapeHtml(source.description)}`;
-            }
-
-            // Add metadata if available
-            if (metadata && metadata[docKey]) {
-              referenceText += this._formatMetadata(metadata[docKey]);
-            }
-
-            // Add snippet
             const snippet = String(docContent)
               .substring(0, LIMITS.SNIPPET_LENGTH)
               .replace(/[#*-]/g, "")
               .replace(/\s+/g, " ")
               .trim();
 
-            if (snippet) {
-              referenceText += `<br><em>${ChatValidators.escapeHtml(snippet)}...</em>`;
-            }
-
-            citations[citationNum] = referenceText;
+            citations[citationNum] = {
+              sourceName: source.name || "Reference",
+              sourceUrl: source.url || "",
+              description: source.description || "",
+              metadata: metadata?.[docKey] || null,
+              snippet: snippet,
+            };
           }
         });
       }
@@ -1064,17 +1227,50 @@ class MessageRenderer {
    * Builds references section HTML
    */
   _buildReferencesSection(citations) {
-    let referencesHtml =
-      '<div class="references-section"><h4>References:</h4><ol class="references-list">';
-
+    // Group citations by source document name
+    const groups = {};
     const sortedNums = Object.keys(citations).sort(
       (a, b) => parseInt(a) - parseInt(b),
     );
+
     sortedNums.forEach((num) => {
-      referencesHtml += `<li value="${num}" id="ref-${num}" class="reference-item">${citations[num]}</li>`;
+      const cite = citations[num];
+      const key = cite.sourceName;
+      if (!groups[key]) {
+        groups[key] = { sourceName: cite.sourceName, sourceUrl: cite.sourceUrl, description: cite.description, entries: [] };
+      }
+      groups[key].entries.push({ num, metadata: cite.metadata, snippet: cite.snippet });
     });
 
-    referencesHtml += "</ol></div>";
+    let referencesHtml = `<div class="references-section"><h4>${_t(this.options.language, "references")}</h4>`;
+
+    Object.values(groups).forEach((group) => {
+      // Source header
+      let header = group.sourceUrl
+        ? `<a href="${ChatValidators.escapeHtml(group.sourceUrl)}" target="_blank" rel="noopener"><strong>${ChatValidators.escapeHtml(group.sourceName)}</strong></a>`
+        : `<strong>${ChatValidators.escapeHtml(group.sourceName)}</strong>`;
+      if (group.description) {
+        header += ` - ${ChatValidators.escapeHtml(group.description)}`;
+      }
+
+      referencesHtml += `<div class="reference-group">${header}`;
+      referencesHtml += '<ol class="references-list">';
+
+      group.entries.forEach((entry) => {
+        let entryHtml = "";
+        if (entry.metadata) {
+          entryHtml += this._formatMetadata(entry.metadata);
+        }
+        if (entry.snippet) {
+          entryHtml += `<em>${ChatValidators.escapeHtml(entry.snippet)}...</em>`;
+        }
+        referencesHtml += `<li value="${entry.num}" id="ref-${entry.num}" class="reference-item">${entryHtml}</li>`;
+      });
+
+      referencesHtml += "</ol></div>";
+    });
+
+    referencesHtml += "</div>";
     return referencesHtml;
   }
 
@@ -1152,7 +1348,6 @@ class StyleGenerator {
 
   generate() {
     return `
-      ${this.generateImports()}
       ${this.generateVariables()}
       ${this.generateButton()}
       ${this.generateWindow()}
@@ -1161,52 +1356,77 @@ class StyleGenerator {
       ${this.generateMarkdown()}
       ${this.generateCitations()}
       ${this.generateMobile()}
+      ${this.generateIframeMode()}
       ${this.generateAnimations()}
       ${this.generateAccessibility()}
     `;
   }
 
   generateVariables() {
+    const o = this.options;
+    const id = o._instanceId || "chat-0";
     return `
-      :root {
+      #${id}, #${id}-btn {
         /* Color variables */
-        --chat-title-bg: ${this.options.titleBackgroundColor};
-        --chat-title-fg: ${this.options.titleFontColor};
-        --chat-assistant-color: ${this.options.assistantColor};
-        --chat-assistant-fg: ${this.options.assistantFontColor};
-        --chat-user-color: ${this.options.userColor};
-        --chat-user-fg: ${this.options.userFontColor};
-        --chat-background: ${this.options.chatBackground};
-        --chat-stamp-color: ${this.options.stampColor};
-        --chat-code-bg: ${this.options.codeBackgroundColor};
-        --chat-code-fg: ${this.options.codeTextColor};
-        --chat-border: ${this.options.borderColor};
-        --chat-button-icon: ${this.options.buttonIconColor};
-        --chat-scrollbar: ${this.options.scrollbarColor};
-        --chat-input-fg: ${this.options.inputTextColor};
+        --chat-title-bg: ${o.titleBackgroundColor};
+        --chat-title-fg: ${o.titleFontColor};
+        --chat-assistant-color: ${o.assistantColor};
+        --chat-assistant-fg: ${o.assistantFontColor};
+        --chat-user-color: ${o.userColor};
+        --chat-user-fg: ${o.userFontColor};
+        --chat-background: ${o.chatBackground};
+        --chat-stamp-color: ${o.stampColor};
+        --chat-code-bg: ${o.codeBackgroundColor};
+        --chat-code-fg: ${o.codeTextColor};
+        --chat-subtitle-color: ${o.subtitleColor || o.titleFontColor};
+        --chat-subtitle-size: ${o.subtitleFontSize}rem;
+        --chat-border-window: ${o.windowBorderColor};
+        --chat-border-header: ${o.headerBorderColor};
+        --chat-border-assistant: ${o.assistantBubbleBorderColor};
+        --chat-border-user: ${o.userBubbleBorderColor};
+        --chat-border-input: ${o.inputBorderColor};
+        --chat-border-code: ${o.codeBorderColor};
+        --chat-border-citation: ${o.citationBorderColor};
+        --chat-button-icon: ${o.buttonIconColor};
+        --chat-scrollbar: ${o.scrollbarColor};
+        --chat-input-fg: ${o.inputTextColor};
 
-        /* Opacity variables */
-        --assistant-opacity: ${this.options.assistantMessageOpacity};
-        --user-opacity: ${this.options.userMessageOpacity};
-        --code-opacity: ${this.options.codeOpacity};
-        --input-opacity: ${this.options.inputAreaOpacity};
+        /* Button state colors */
+        --chat-button-inactive-bg: ${o.buttonInactiveColor || "var(--chat-assistant-color)"};
+        --chat-button-active-bg: ${o.buttonActiveColor || "var(--chat-user-color)"};
+
+        /* Computed backgrounds (hex + opacity → rgba) */
+        --chat-code-bg-alpha: ${ColorUtils.hexToRgba(o.codeBackgroundColor, o.codeOpacity)};
+        --chat-input-area-bg: ${ColorUtils.hexToRgba(o.chatBackground, o.inputAreaOpacity)};
+        --chat-error-bg: ${ColorUtils.hexToRgba(o.stampColor, 0.1)};
+        --chat-selection-bg: ${ColorUtils.hexToRgba(o.userColor, 0.3)};
+        --chat-user-bubble-bg: ${ColorUtils.getColorWithOpacity("var(--chat-user-color)", o.userMessageOpacity)};
+        --chat-assistant-bubble-bg: ${ColorUtils.getColorWithOpacity("var(--chat-assistant-color)", o.assistantMessageOpacity)};
+
+        /* Shadow variables (scaled by intensity) */
+        --btn-shadow: ${ColorUtils.scaledShadow("0 4px 12px rgba(0, 0, 0, 0.15)", o.buttonShadowIntensity)};
+        --btn-shadow-hover: ${ColorUtils.scaledShadow("0 6px 16px rgba(0, 0, 0, 0.3)", o.buttonShadowIntensity)};
+        --btn-shadow-badge: ${ColorUtils.scaledShadow("0 2px 4px rgba(0, 0, 0, 0.2)", o.buttonShadowIntensity)};
+        --btn-shadow-typing: ${ColorUtils.scaledShadow("0 2px 8px rgba(0, 0, 0, 0.15)", o.buttonShadowIntensity)};
+        --btn-shadow-preview: ${ColorUtils.scaledShadow("0 4px 12px rgba(0, 0, 0, 0.1)", o.buttonShadowIntensity)};
+        --win-shadow: ${ColorUtils.scaledShadow("0 10px 40px rgba(0, 0, 0, 0.15)", o.windowShadowIntensity)};
+        --win-shadow-input: ${ColorUtils.scaledShadow("0 4px 12px rgba(0, 0, 0, 0.15)", o.inputShadowIntensity != null ? o.inputShadowIntensity : o.windowShadowIntensity)};
+        --win-shadow-hover: ${ColorUtils.scaledShadow("0 2px 8px rgba(0, 0, 0, 0.3)", o.windowShadowIntensity)};
 
         /* Size variables */
-        --button-size: ${this.options.buttonSize}px;
-        --window-width: ${this.options.windowWidth}px;
-        --window-height: ${this.options.windowHeight}px;
+        --chat-radius: ${o.borderRadius}px;
+        --button-size: ${o.buttonSize}px;
+        --window-width: ${o.windowWidth}px;
+        --window-height: ${o.windowHeight}px;
         --scrollbar-width: ${SIZES.SCROLLBAR_WIDTH}px;
         --input-max-height: ${SIZES.INPUT_MAX_HEIGHT}px;
       }
     `;
   }
 
-  generateImports() {
-    // Inject <link> elements instead of @import for better performance
+  injectExternalAssets() {
+    // Inject <link> elements for external stylesheets
     const links = [
-      {
-        href: "https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap",
-      },
       { href: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" },
     ];
     links.forEach(({ href }) => {
@@ -1217,7 +1437,6 @@ class StyleGenerator {
         document.head.appendChild(link);
       }
     });
-    return "";
   }
 
   generateButton() {
@@ -1225,13 +1444,13 @@ class StyleGenerator {
     return `
       .universal-chat-button {
         position: fixed;
-        ${position.includes("right") ? "right: 20px" : "left: 20px"};
-        ${position.includes("bottom") ? "bottom: 20px" : "top: 20px"};
+        ${position.includes("right") ? `right: ${SIZES.WIDGET_MARGIN}px` : `left: ${SIZES.WIDGET_MARGIN}px`};
+        ${position.includes("bottom") ? `bottom: ${SIZES.WIDGET_MARGIN}px` : `top: ${SIZES.WIDGET_MARGIN}px`};
         width: var(--button-size);
         height: var(--button-size);
-        border-radius: 2px;
-        background: var(--chat-assistant-color);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border-radius: var(--chat-radius);
+        background: var(--chat-button-inactive-bg);
+        box-shadow: var(--btn-shadow);
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -1240,26 +1459,27 @@ class StyleGenerator {
         z-index: 9998;
         border: none;
         color: var(--chat-button-icon);
+        font-family: inherit;
         font-size: 28px;
+        line-height: 1;
       }
 
       .universal-chat-button:hover,
       .universal-chat-button:focus {
         background: var(--chat-stamp-color);
         transform: scale(1.1);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        box-shadow: var(--btn-shadow-hover);
       }
 
       .universal-chat-button.chat-open {
-        transform: rotate(90deg);
-        background: var(--chat-user-color);
+        background: var(--chat-button-active-bg);
       }
 
       .universal-chat-button.chat-open:hover,
       .universal-chat-button.chat-open:focus {
         background: var(--chat-stamp-color);
-        transform: rotate(90deg) scale(1.1);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        transform: scale(1.1);
+        box-shadow: var(--btn-shadow-hover);
       }
 
       .chat-unread-badge {
@@ -1268,13 +1488,13 @@ class StyleGenerator {
         right: -5px;
         background: var(--chat-assistant-color);
         color: var(--chat-stamp-color);
-        border-radius: 2px;
+        border-radius: var(--chat-radius);
         padding: 2px 6px;
         font-size: 12px;
         font-weight: bold;
         min-width: 20px;
         text-align: center;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        box-shadow: var(--btn-shadow-badge);
       }
 
       .button-typing-indicator {
@@ -1284,8 +1504,8 @@ class StyleGenerator {
         transform: translateX(-50%);
         background: var(--chat-background);
         padding: 4px 8px;
-        border-radius: 2px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        border-radius: var(--chat-radius);
+        box-shadow: var(--btn-shadow-typing);
         display: flex;
         align-items: center;
         gap: 2px;
@@ -1310,8 +1530,8 @@ class StyleGenerator {
         ${position.includes("right") ? "right: 0" : "left: 0"};
         background: var(--chat-background);
         padding: 8px 12px;
-        border-radius: 2px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        border-radius: var(--chat-radius);
+        box-shadow: var(--btn-shadow-preview);
         max-width: 250px;
         font-size: 14px;
         color: var(--chat-assistant-fg);
@@ -1319,6 +1539,14 @@ class StyleGenerator {
         overflow: hidden;
         text-overflow: ellipsis;
         animation: slideIn 0.3s ease;
+      }
+
+      .universal-chat-button.button-text-content {
+        font-size: 14px;
+        line-height: 1.2;
+        padding: 4px;
+        word-break: break-word;
+        text-align: center;
       }
     `;
   }
@@ -1328,22 +1556,28 @@ class StyleGenerator {
     return `
       .universal-chat-window {
         position: fixed;
-        ${position.includes("right") ? "right: 20px" : "left: 20px"};
-        ${position.includes("bottom") ? "bottom: calc(var(--button-size) + 40px)" : "top: calc(var(--button-size) + 40px)"};
+        ${position.includes("right") ? `right: ${SIZES.WIDGET_MARGIN}px` : `left: ${SIZES.WIDGET_MARGIN}px`};
+        ${position.includes("bottom") ? `bottom: calc(var(--button-size) + ${SIZES.WIDGET_MARGIN * 2}px)` : `top: calc(var(--button-size) + ${SIZES.WIDGET_MARGIN * 2}px)`};
         width: var(--window-width);
         height: var(--window-height);
         max-height: calc(100vh - var(--button-size) - 60px);
         background: var(--chat-background);
-        border-radius: 2px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        border-radius: var(--chat-radius);
+        overflow: hidden;
+        border: none;
+        outline: 1px solid var(--chat-border-window);
+        box-shadow: var(--win-shadow);
         display: flex;
         flex-direction: column;
         z-index: 9999;
         opacity: 0;
         transform: translateY(20px) scale(0.95);
         pointer-events: none;
-        transition: all 0.3s ease;
         font-family: inherit;
+      }
+
+      .universal-chat-window.chat-ready {
+        transition: opacity 0.3s ease, transform 0.3s ease, pointer-events 0s;
       }
 
       .universal-chat-window.open {
@@ -1356,7 +1590,7 @@ class StyleGenerator {
         background: var(--chat-title-bg);
         color: var(--chat-title-fg);
         padding: 0.5rem 1.25rem;
-        border-radius: 2px 2px 0 0;
+        border-bottom: 1px solid var(--chat-border-header);
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -1367,6 +1601,29 @@ class StyleGenerator {
         font-size: 1.1rem;
         font-weight: 600;
         color: var(--chat-title-fg);
+      }
+
+      .chat-header-subtitle {
+        margin: 0;
+        font-size: var(--chat-subtitle-size, 0.65rem);
+        font-weight: 400;
+        color: var(--chat-subtitle-color, var(--chat-title-fg));
+        opacity: 0.75;
+        line-height: 1.3;
+      }
+      .chat-header-subtitle a {
+        color: inherit;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .chat-header-subtitle a:hover {
+        opacity: 1;
+      }
+      .chat-header-subtitle a:focus-visible {
+        opacity: 1;
+        outline: 2px solid var(--chat-stamp-color);
+        outline-offset: 2px;
+        border-radius: 2px;
       }
 
       .chat-header-actions {
@@ -1385,7 +1642,6 @@ class StyleGenerator {
         align-items: center;
         justify-content: center;
         transition: opacity 0.2s;
-        font-size: 28px;
       }
 
       .chat-header-btn:hover,
@@ -1401,9 +1657,9 @@ class StyleGenerator {
         color: var(--chat-stamp-color);
         text-align: center;
         padding: 0.25rem;
-        background: ${ColorUtils.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
+        background: var(--chat-code-bg-alpha);
         margin: 0 1rem;
-        border-radius: 2px;
+        border-radius: var(--chat-radius);
       }
     `;
   }
@@ -1425,7 +1681,7 @@ class StyleGenerator {
 
       .chat-messages::-webkit-scrollbar-thumb {
         background: var(--chat-scrollbar);
-        border-radius: 2px;
+        border-radius: var(--chat-radius);
       }
 
       .message {
@@ -1439,9 +1695,23 @@ class StyleGenerator {
         display: inline-block;
         max-width: 90%;
         padding: 0.75rem 1rem;
-        border-radius: 2px;
+        border-radius: var(--chat-radius);
         word-wrap: break-word;
       }
+
+      .message-bubble img {
+        max-width: 100%;
+        height: auto;
+        border-radius: calc(var(--chat-radius) / 2);
+        margin: 0.4em 0;
+      }
+
+      .message-bubble p {
+        margin: 0.4em 0;
+      }
+
+      .message-bubble p:first-child { margin-top: 0; }
+      .message-bubble p:last-child { margin-bottom: 0; }
 
       .message-bubble h1,
       .message-bubble h2,
@@ -1462,17 +1732,17 @@ class StyleGenerator {
       }
 
       .message.user .message-bubble {
-        background: ${ColorUtils.getColorWithOpacity("var(--chat-user-color)", this.options.userMessageOpacity)};
-        border: 1px solid var(--chat-border);
+        background: var(--chat-user-bubble-bg);
+        border: 1px solid var(--chat-border-user);
         color: var(--chat-user-fg);
-        border-radius: 2px;
+        border-radius: var(--chat-radius);
         text-align: left;
       }
 
       .message.assistant .message-bubble {
-        background: ${ColorUtils.getColorWithOpacity("var(--chat-assistant-color)", this.options.assistantMessageOpacity)};
-        border: 1px solid var(--chat-border);
-        border-radius: 2px;
+        background: var(--chat-assistant-bubble-bg);
+        border: 1px solid var(--chat-border-assistant);
+        border-radius: var(--chat-radius);
         color: var(--chat-assistant-fg);
       }
 
@@ -1485,9 +1755,9 @@ class StyleGenerator {
       .typing-indicator {
         display: inline-block;
         padding: 0.75rem 1rem;
-        background: ${ColorUtils.getColorWithOpacity("var(--chat-assistant-color)", this.options.assistantMessageOpacity)};
-        border: 1px solid var(--chat-border);
-        border-radius: 2px;
+        background: var(--chat-assistant-bubble-bg);
+        border: 1px solid var(--chat-border-assistant);
+        border-radius: var(--chat-radius);
       }
 
       .typing-indicator span {
@@ -1503,13 +1773,22 @@ class StyleGenerator {
       .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
       .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 
+      .stream-error-notice {
+        margin-top: 0.5rem;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8em;
+        color: #d32f2f;
+        border-top: 1px solid rgba(211,47,47,0.3);
+        font-style: italic;
+      }
+
       .message.error {
         text-align: center;
         margin: 1rem 0;
       }
 
       .message.error .message-bubble {
-        background: ${ColorUtils.hexToRgba(this.options.stampColor, 0.1)};
+        background: var(--chat-error-bg);
         border: 1px solid var(--chat-stamp-color);
         color: var(--chat-assistant-fg);
         padding: 1rem;
@@ -1521,8 +1800,8 @@ class StyleGenerator {
         padding: 0.5rem 1rem;
         background: var(--chat-user-color);
         color: var(--chat-user-fg);
-        border: 1px solid var(--chat-border);
-        border-radius: 2px;
+        border: 1px solid var(--chat-border-input);
+        border-radius: var(--chat-radius);
         cursor: pointer;
         font-size: 0.9rem;
         font-weight: 500;
@@ -1536,7 +1815,7 @@ class StyleGenerator {
       .retry-btn:focus:not(:disabled) {
         background: var(--chat-stamp-color);
         transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        box-shadow: var(--win-shadow-hover);
         outline: none;
       }
 
@@ -1554,16 +1833,16 @@ class StyleGenerator {
         bottom: 1rem;
         left: 1rem;
         right: 1rem;
-        background: ${ColorUtils.hexToRgba(this.options.chatBackground, this.options.inputAreaOpacity)};
-        border-radius: 2px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        background: var(--chat-input-area-bg);
+        border-radius: var(--chat-radius);
+        box-shadow: var(--win-shadow-input);
         z-index: 10;
       }
 
       .chat-input-container {
         display: flex;
-        border: 1px solid var(--chat-border);
-        border-radius: 2px;
+        border: 1px solid var(--chat-border-input);
+        border-radius: var(--chat-radius);
         overflow: hidden;
         background: transparent;
         padding: 0;
@@ -1579,6 +1858,7 @@ class StyleGenerator {
         max-height: var(--input-max-height);
         background: transparent;
         color: var(--chat-input-fg);
+        box-sizing: border-box;
       }
 
       .chat-input:focus {
@@ -1586,8 +1866,12 @@ class StyleGenerator {
         caret-color: var(--chat-stamp-color);
       }
 
-      .chat-input-container:focus-within {
-        box-shadow: none !important;
+      /* Only show the input container ring during keyboard navigation.
+         The .keyboard-nav class is toggled by JS (Tab adds it, mousedown removes it)
+         so programmatic focus on open() and click focus don't trigger the ring. */
+      .keyboard-nav .chat-input-container:focus-within {
+        border-color: var(--chat-stamp-color) !important;
+        box-shadow: 0 0 0 2px var(--chat-stamp-color) !important;
       }
 
       .chat-send-btn {
@@ -1595,7 +1879,7 @@ class StyleGenerator {
         background: var(--chat-user-color);
         color: var(--chat-user-fg);
         border: none;
-        border-left: 1px solid var(--chat-border);
+        border-left: 1px solid var(--chat-border-input);
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -1611,7 +1895,7 @@ class StyleGenerator {
       .chat-send-btn:focus:not(:disabled):not([aria-disabled="true"]) {
         background: var(--chat-stamp-color) !important;
         transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        box-shadow: var(--win-shadow-hover);
         outline: none !important;
       }
 
@@ -1635,10 +1919,10 @@ class StyleGenerator {
   generateMarkdown() {
     return `
       .message-bubble code {
-        background: ${ColorUtils.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
+        background: var(--chat-code-bg-alpha);
         padding: 0.125rem 0.25rem;
-        border-radius: 2px;
-        font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        border-radius: var(--chat-radius);
+        font-family: 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
         font-size: 0.9em;
         color: var(--chat-code-fg);
         word-break: break-all;
@@ -1646,24 +1930,24 @@ class StyleGenerator {
       }
 
       .message.user .message-bubble code {
-        background: ${ColorUtils.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
+        background: var(--chat-code-bg-alpha);
         color: var(--chat-code-fg);
       }
 
       .message-bubble pre {
-        background: ${ColorUtils.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
+        background: var(--chat-code-bg-alpha);
         color: var(--chat-code-fg);
         padding: 0.5rem;
         margin-top: 0.1rem;
-        border-radius: 2px;
+        border-radius: var(--chat-radius);
         overflow-x: auto;
         overflow-y: hidden;
         max-width: 100%;
         white-space: pre-wrap;
         word-break: break-word;
         position: relative;
-        font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        border: 1px solid var(--chat-border);
+        font-family: 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+        border: 1px solid var(--chat-border-code);
       }
 
       .message-bubble pre code {
@@ -1678,23 +1962,23 @@ class StyleGenerator {
         position: absolute;
         top: 0.5rem;
         right: 0.5rem;
-        background: var(--chat-border);
+        background: var(--chat-border-code);
         color: var(--chat-title-fg);
         border: none;
-        border-radius: 4px;
+        border-radius: var(--chat-radius);
         padding: 0.25rem 0.5rem;
         font-size: 0.75rem;
         cursor: pointer;
-        opacity: 0;
+        opacity: 0.4;
         transition: opacity 0.2s ease;
         z-index: 1;
       }
 
       .code-copy-btn:hover,
-      .code-copy-btn:focus {
+      .code-copy-btn:focus-visible {
         background: var(--chat-stamp-color);
         transform: scale(1.05);
-        outline: none;
+        opacity: 1;
       }
 
       .message-bubble pre:hover .code-copy-btn {
@@ -1713,14 +1997,17 @@ class StyleGenerator {
       .katex-display {
         margin: 1em 0;
         text-align: center;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
       }
 
       .katex-error {
         color: var(--chat-stamp-color);
         border: 1px solid var(--chat-stamp-color);
         padding: 0.25rem;
-        border-radius: 3px;
-        background: ${ColorUtils.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
+        border-radius: var(--chat-radius);
+        background: var(--chat-code-bg-alpha);
       }
 
       .message-bubble ul,
@@ -1733,6 +2020,11 @@ class StyleGenerator {
         margin-bottom: 0.25rem;
       }
 
+      .message-bubble li > ul,
+      .message-bubble li > ol {
+        margin: 0.15rem 0;
+      }
+
       .message-bubble a {
         color: var(--chat-code-fg);
         text-decoration: underline;
@@ -1742,6 +2034,11 @@ class StyleGenerator {
       .message-bubble a:hover,
       .message-bubble a:focus {
         color: var(--chat-stamp-color);
+      }
+      .message-bubble a:focus-visible {
+        outline: 2px solid var(--chat-stamp-color);
+        outline-offset: 1px;
+        border-radius: 2px;
       }
     `;
   }
@@ -1754,7 +2051,7 @@ class StyleGenerator {
         text-decoration: none;
         font-weight: 500;
         padding: 1px 3px;
-        border-radius: 2px;
+        border-radius: var(--chat-radius);
         transition: all 0.2s ease;
         font-size: 0.85em;
       }
@@ -1770,7 +2067,7 @@ class StyleGenerator {
       .references-section {
         margin-top: 1rem;
         padding-top: 1rem;
-        border-top: 1px solid var(--chat-border);
+        border-top: 1px solid var(--chat-border-citation);
       }
 
       .references-section h4 {
@@ -1780,10 +2077,19 @@ class StyleGenerator {
         color: var(--chat-assistant-fg);
       }
 
+      .reference-group {
+        margin-bottom: 0.75rem;
+        font-size: 0.8em;
+      }
+
+      .reference-group:last-child {
+        margin-bottom: 0;
+      }
+
       .references-list {
-        margin: 0;
+        margin: 0.25rem 0 0;
         padding-left: 1rem;
-        font-size: 0.75em;
+        font-size: 0.9em;
       }
 
       .reference-item {
@@ -1794,9 +2100,9 @@ class StyleGenerator {
       }
 
       .reference-item.highlighted {
-        background: ${ColorUtils.hexToRgba(this.options.codeBackgroundColor, this.options.codeOpacity)};
+        background: var(--chat-code-bg-alpha);
         padding: 0.5rem;
-        border-radius: 2px;
+        border-radius: var(--chat-radius);
         border-left: 2px solid var(--chat-user-color);
       }
     `;
@@ -1805,52 +2111,53 @@ class StyleGenerator {
   generateMobile() {
     return `
       @media (max-width: ${SIZES.MOBILE_BREAKPOINT}px) {
-        .universal-chat-window {
+        .universal-chat-window:not(.inline-mode) {
           width: 100vw !important;
           height: 100vh !important;
-          height: 100dvh !important;
-          max-height: 100vh !important;
+          height: 100lvh !important;
+          max-height: none !important;
           top: 0 !important;
           left: 0 !important;
           right: 0 !important;
           bottom: 0 !important;
           border-radius: 0 !important;
           box-shadow: none !important;
-        }
-
-        .universal-chat-window.open {
+          outline: none !important;
           transform: none !important;
+          background: var(--chat-title-bg) !important;
         }
 
         .universal-chat-button.chat-open {
           display: none !important;
         }
 
+        .universal-chat-window:not(.inline-mode):not(.open) {
+          display: none !important;
+        }
+
+        .universal-chat-window:not(.iframe-mode) .chat-header {
+          padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+        }
+
         .chat-messages {
-          padding-bottom: calc(120px + env(safe-area-inset-bottom, 0));
+          padding-bottom: calc(100vh - 100dvh + var(--input-max-height) + env(safe-area-inset-bottom, 0px) + env(keyboard-inset-height, 0px));
         }
 
         .chat-input-area {
-          position: fixed !important;
-          bottom: env(safe-area-inset-bottom, 0);
-          left: 1rem;
-          right: 1rem;
-          width: auto;
-          max-width: none;
-          margin: 0;
-          border-radius: 2px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-          padding-bottom: 0;
-          z-index: 1000;
+          bottom: calc(100vh - 100dvh + env(safe-area-inset-bottom, 0px) + env(keyboard-inset-height, 0px) + 4px);
         }
 
         .chat-input-container {
-          border-radius: 2px;
-          border: 1px solid var(--chat-border);
+          border-radius: var(--chat-radius);
+          border: 1px solid var(--chat-border-input);
         }
 
         .chat-input {
           font-size: 16px !important;
+        }
+
+        .katex {
+          font-size: 1em;
         }
       }
 
@@ -1858,13 +2165,13 @@ class StyleGenerator {
         .universal-chat-button:active {
           background: var(--chat-stamp-color);
           transform: scale(1.1);
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+          box-shadow: var(--btn-shadow-hover);
         }
 
         .universal-chat-button.chat-open:active {
           background: var(--chat-stamp-color);
-          transform: rotate(90deg) scale(1.1);
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+          transform: scale(1.1);
+          box-shadow: var(--btn-shadow-hover);
         }
 
         .chat-header-btn:active {
@@ -1876,7 +2183,7 @@ class StyleGenerator {
         .chat-send-btn:active:not(:disabled):not([aria-disabled="true"]) {
           background: var(--chat-stamp-color) !important;
           transform: scale(1.05);
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+          box-shadow: var(--win-shadow-hover);
         }
 
         .code-copy-btn:active {
@@ -1897,7 +2204,57 @@ class StyleGenerator {
         .retry-btn:active:not(:disabled) {
           background: var(--chat-stamp-color);
           transform: scale(1.05);
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+          box-shadow: var(--win-shadow-hover);
+        }
+      }
+    `;
+  }
+
+  generateIframeMode() {
+    return `
+      .universal-chat-window.iframe-mode {
+        position: relative !important;
+        width: 100% !important;
+        height: 100vh !important;
+        height: 100lvh !important;
+        max-height: none !important;
+        top: auto !important;
+        left: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        outline: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+        pointer-events: auto !important;
+      }
+
+      .universal-chat-window.iframe-mode .chat-header {
+        padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+      }
+
+      .universal-chat-window.inline-mode {
+        position: relative !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-height: none !important;
+        top: auto !important;
+        left: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        opacity: 1 !important;
+        transform: none !important;
+        pointer-events: auto !important;
+      }
+
+      @media (max-width: ${SIZES.MOBILE_BREAKPOINT}px) {
+        .universal-chat-window.iframe-mode {
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
         }
       }
     `;
@@ -1968,13 +2325,55 @@ class StyleGenerator {
       }
 
       .universal-chat-window ::selection {
-        background: ${ColorUtils.hexToRgba(this.options.userColor, 0.3)};
+        background: var(--chat-selection-bg);
         color: var(--chat-assistant-fg);
       }
 
       .universal-chat-window ::-moz-selection {
-        background: ${ColorUtils.hexToRgba(this.options.userColor, 0.3)};
+        background: var(--chat-selection-bg);
         color: var(--chat-assistant-fg);
+      }
+
+      /* ── Visible focus indicators (WCAG 2.4.7 Focus Visible, AA) ──────────
+         Hover and focus styles were previously combined with \`outline: none\`,
+         which meant keyboard-only users tabbing without hovering saw no visible
+         focus state. These rules add an explicit box-shadow ring that is
+         independent of the hover state. */
+      .universal-chat-window :focus-visible,
+      .universal-chat-button:focus-visible {
+        outline: 2px solid var(--chat-stamp-color);
+        outline-offset: 2px;
+        border-radius: var(--chat-radius);
+      }
+      .chat-header-btn:focus-visible,
+      .chat-send-btn:focus-visible,
+      .retry-btn:focus-visible,
+      .code-copy-btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--chat-background),
+                    0 0 0 4px var(--chat-stamp-color);
+      }
+      /* Input focus ring is handled by .keyboard-nav .chat-input-container:focus-within
+         in generateInput() — no separate rule needed here. Browsers apply :focus-visible
+         to textareas even on click, which would show an unwanted ring on open. */
+      .citation-link:focus-visible {
+        outline: 2px solid var(--chat-stamp-color);
+        outline-offset: 1px;
+        text-decoration: underline;
+      }
+      /* Browsers without :focus-visible fall back to a plain focus ring */
+      @supports not selector(:focus-visible) {
+        .universal-chat-window :focus,
+        .universal-chat-button:focus {
+          outline: 2px solid var(--chat-stamp-color);
+          outline-offset: 2px;
+        }
+      }
+
+      /* Copy-code button: reveal on keyboard focus-within, not only hover (D5). */
+      .message-bubble pre:focus-within .code-copy-btn,
+      .code-copy-btn:focus-visible {
+        opacity: 1 !important;
       }
     `;
   }
@@ -2028,7 +2427,18 @@ class AccessibilityManager {
   trapFocus(e) {
     if (e.key !== "Tab") return;
 
-    if (!this.window.contains(document.activeElement)) return;
+    // If focus is outside the chat window, only pull it in when nothing else is
+    // meaningfully focused (e.g. after opening the widget via mouse click on mobile).
+    // Never steal focus from other interactive elements on the host page.
+    if (!this.window.contains(document.activeElement)) {
+      if (document.activeElement && document.activeElement !== document.body) return;
+      e.preventDefault();
+      const focusable = this.getFocusableElements();
+      if (focusable.length) {
+        (e.shiftKey ? focusable[focusable.length - 1] : focusable[0]).focus();
+      }
+      return;
+    }
 
     e.preventDefault();
 
@@ -2070,9 +2480,11 @@ class AccessibilityManager {
   }
 
   /**
-   * Sets up focus trap
+   * Sets up focus trap. Idempotent: calling setup() while a handler is already
+   * installed is a no-op, so rapid open/close cycles don't stack listeners.
    */
   setup() {
+    if (this.focusTrapHandler) return;
     this.focusTrapHandler = (e) => this.trapFocus(e);
     document.addEventListener("keydown", this.focusTrapHandler);
   }
@@ -2111,7 +2523,6 @@ class ChatUI {
    * Initializes UI
    */
   init() {
-    this._ensureViewportMeta();
     this._injectStyles();
     this._createWidget();
     this._bindEvents();
@@ -2119,6 +2530,12 @@ class ChatUI {
       this.elements.window,
       this.options,
     );
+    // In iframe/inline mode the widget is always open but open() is never
+    // called, so we need to activate the focus trap here directly.
+    const mode = this.options.mode;
+    if (mode === "iframe" || mode === "inline") {
+      this.accessibilityManager.setup();
+    }
   }
 
   /**
@@ -2127,22 +2544,77 @@ class ChatUI {
   open() {
     this.elements.window.classList.add("open");
     this.elements.button.classList.add("chat-open");
-    this.elements.button.innerHTML = "×";
+    this.elements.button.classList.remove("button-text-content");
+    this.elements.button.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" aria-hidden="true" focusable="false"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
     this.elements.button.setAttribute(
       "aria-label",
-      "Close chat. Press Escape or Enter to close",
+      _t(this.options.language, "closeChatAriaLabel"),
     );
     this.elements.button.setAttribute("aria-expanded", "true");
     this.elements.button.setAttribute("tabindex", "-1");
-    this.elements.button.title = "Close chat (Escape)";
+    this.elements.button.title = _t(this.options.language, "closeChat");
     this.elements.window.setAttribute("aria-modal", "true");
+
+    // Prevent body scroll on mobile and fill safe area (notch, home bar) with title bar color
+    if (window.innerWidth <= SIZES.MOBILE_BREAKPOINT && this.options.mode !== 'iframe') {
+      if (!this._themeMetaEl) {
+        this._themeMetaEl = document.querySelector('meta[name="theme-color"]');
+      }
+      let viewportMeta = document.querySelector('meta[name="viewport"]');
+      const hadViewportMeta = !!viewportMeta;
+      const originalViewportContent = viewportMeta ? viewportMeta.content : null;
+
+      // Ensure viewport-fit=cover for env(safe-area-inset-*) to work
+      if (!viewportMeta) {
+        viewportMeta = document.createElement('meta');
+        viewportMeta.name = 'viewport';
+        viewportMeta.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+        document.head.appendChild(viewportMeta);
+      } else if (!/viewport-fit\s*=\s*cover/.test(viewportMeta.content)) {
+        if (/viewport-fit\s*=/.test(viewportMeta.content)) {
+          viewportMeta.content = viewportMeta.content.replace(/viewport-fit\s*=\s*[^,\s]+/, 'viewport-fit=cover');
+        } else {
+          viewportMeta.content += ', viewport-fit=cover';
+        }
+      }
+
+      this._savedBodyStyles = {
+        htmlOverflow: document.documentElement.style.overflow,
+        bodyOverflow: document.body.style.overflow,
+        htmlBg: document.documentElement.style.background,
+        bodyBg: document.body.style.background,
+        themeColor: this._themeMetaEl ? this._themeMetaEl.content : null,
+        viewportMeta: viewportMeta,
+        hadViewportMeta: hadViewportMeta,
+        viewportContent: originalViewportContent,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+      };
+      window.scrollTo(0, 0);
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      this._applyDocumentChrome(this.options.titleBackgroundColor);
+
+      // Hide all page content — iOS 26 Liquid Glass samples DOM content through
+      // fixed elements for toolbar tinting, so backdrop alone is not enough
+      this._hiddenSiblings = [];
+      for (const child of document.body.children) {
+        if (child !== this.elements.window && child !== this.elements.button) {
+          this._hiddenSiblings.push({ el: child, display: child.style.display });
+          child.style.display = 'none';
+        }
+      }
+    }
 
     this.hideMessagePreview();
     this.hideButtonTyping();
 
-    setTimeout(() => {
-      this.elements.input.focus();
-    }, TIMINGS.FOCUS_DELAY);
+    // Skip auto-focus on mobile — avoids iOS Safari scroll-to-input issues
+    if (window.innerWidth > SIZES.MOBILE_BREAKPOINT) {
+      setTimeout(() => {
+        this.elements.input.focus();
+      }, TIMINGS.FOCUS_DELAY);
+    }
 
     this.accessibilityManager.setup();
   }
@@ -2151,20 +2623,72 @@ class ChatUI {
    * Closes chat window
    */
   close() {
+    // Restore mobile state BEFORE hiding the chat window — Safari 26 Liquid Glass
+    // samples toolbar tint immediately, so the page must be fully restored first
+    if (this._inputArea) this._inputArea.style.bottom = '';
+    this.elements.messages.style.paddingBottom = '';
+    if (this._savedBodyStyles) {
+      if (this._hiddenSiblings) {
+        for (const { el, display } of this._hiddenSiblings) {
+          el.style.display = display;
+        }
+        this._hiddenSiblings = null;
+      }
+      document.documentElement.style.overflow = this._savedBodyStyles.htmlOverflow;
+      document.body.style.overflow = this._savedBodyStyles.bodyOverflow;
+      document.documentElement.style.background = this._savedBodyStyles.htmlBg;
+      document.body.style.background = this._savedBodyStyles.bodyBg;
+      if (this._savedBodyStyles.themeColor !== null) {
+        this._setThemeColor(this._savedBodyStyles.themeColor);
+      } else if (this._themeMetaEl) {
+        this._themeMetaEl.remove();
+        this._themeMetaEl = null;
+      }
+      const viewportMeta = this._savedBodyStyles.viewportMeta;
+      if (viewportMeta) {
+        if (!this._savedBodyStyles.hadViewportMeta) {
+          viewportMeta.remove();
+        } else if (this._savedBodyStyles.viewportContent !== null) {
+          viewportMeta.content = this._savedBodyStyles.viewportContent;
+        }
+      }
+      window.scrollTo(this._savedBodyStyles.scrollX, this._savedBodyStyles.scrollY);
+      this._savedBodyStyles = null;
+    }
     this.elements.window.classList.remove("open");
     this.elements.button.classList.remove("chat-open");
-    this.elements.button.innerHTML = "💬";
+
+    if (this.options.buttonIconUrl) {
+      this._setButtonIcon();
+    } else {
+      this.elements.button.textContent = this.options.buttonContent;
+      if (this._isTextContent) {
+        this.elements.button.classList.add("button-text-content");
+      }
+    }
     this.elements.button.setAttribute(
       "aria-label",
-      "Open chat. Press Enter to open, Escape to close",
+      _t(this.options.language, "openChatAriaLabel"),
     );
     this.elements.button.setAttribute("aria-expanded", "false");
     this.elements.button.setAttribute("tabindex", "0");
-    this.elements.button.title = "Open chat (Enter)";
+    this.elements.button.title = _t(this.options.language, "openChat");
     this.elements.window.setAttribute("aria-modal", "false");
 
     this.accessibilityManager.remove();
     this.elements.button.focus();
+  }
+
+  /**
+   * Sets button content to the custom icon image
+   */
+  _setButtonIcon() {
+    const img = document.createElement("img");
+    img.src = this.options.buttonIconUrl;
+    img.alt = _t(this.options.language, "chat");
+    img.style.cssText = "width: 60%; height: 60%; object-fit: contain; pointer-events: none;";
+    this.elements.button.textContent = "";
+    this.elements.button.appendChild(img);
   }
 
   /**
@@ -2174,12 +2698,37 @@ class ChatUI {
     const messageEl = document.createElement("div");
     messageEl.className = `message ${type}`;
     messageEl.setAttribute("role", "article");
-    const sender = type === "user" ? "You" : "Assistant";
-    messageEl.setAttribute("aria-label", `Message from ${sender} at ${time}`);
+    const lang = this.options.language;
+    const sender = type === "user" ? _t(lang, "senderYou") : _t(lang, "senderAssistant");
+    messageEl.setAttribute("aria-label", `${_t(lang, "messageFrom")} ${sender} ${_t(lang, "sentAt")} ${time}`);
     messageEl.innerHTML = `
       <div class="message-bubble">${content}</div>
-      <div class="message-time" aria-label="sent at ${time}">${time}</div>
+      <div class="message-time" aria-hidden="true">${time}</div>
     `;
+    this.elements.messages.appendChild(messageEl);
+    this._scrollToBottom();
+    return messageEl;
+  }
+
+  /**
+   * Creates a streaming assistant message bubble (empty, for in-place updates)
+   */
+  addStreamingMessage(time) {
+    const messageEl = document.createElement("div");
+    messageEl.className = "message assistant";
+    messageEl.setAttribute("role", "article");
+    const lang = this.options.language;
+    const sender = _t(lang, "senderAssistant");
+    messageEl.setAttribute("aria-label", `${_t(lang, "messageFrom")} ${sender} ${_t(lang, "sentAt")} ${time}`);
+    // Build bubble via DOM API — no raw HTML injection
+    const bubble = document.createElement("div");
+    bubble.className = "message-bubble";
+    const timeDiv = document.createElement("div");
+    timeDiv.className = "message-time";
+    timeDiv.setAttribute("aria-hidden", "true");
+    timeDiv.textContent = time;
+    messageEl.appendChild(bubble);
+    messageEl.appendChild(timeDiv);
     this.elements.messages.appendChild(messageEl);
     this._scrollToBottom();
     return messageEl;
@@ -2194,7 +2743,7 @@ class ChatUI {
     typingEl.id = `typing-indicator-${this._id}`;
     typingEl.setAttribute("role", "status");
     typingEl.setAttribute("aria-live", "polite");
-    typingEl.setAttribute("aria-label", "Assistant is typing");
+    typingEl.setAttribute("aria-label", _t(this.options.language, "assistantTyping"));
     typingEl.innerHTML =
       '<div class="typing-indicator" aria-hidden="true"><span></span><span></span><span></span></div>';
     this.elements.messages.appendChild(typingEl);
@@ -2267,8 +2816,8 @@ class ChatUI {
     bubble.appendChild(document.createElement("br"));
     const retryBtn = document.createElement("button");
     retryBtn.className = "retry-btn";
-    retryBtn.setAttribute("aria-label", "Retry sending message");
-    retryBtn.textContent = "↻ Retry";
+    retryBtn.setAttribute("aria-label", _t(this.options.language, "retryAriaLabel"));
+    retryBtn.textContent = _t(this.options.language, "retry");
     bubble.appendChild(retryBtn);
     errorEl.appendChild(bubble);
     this.elements.messages.appendChild(errorEl);
@@ -2276,7 +2825,7 @@ class ChatUI {
 
     retryBtn.addEventListener("click", async () => {
       retryBtn.disabled = true;
-      retryBtn.textContent = "Retrying...";
+      retryBtn.textContent = _t(this.options.language, "retrying");
       this.eventBus.emit("retry");
       errorEl.remove();
     });
@@ -2290,7 +2839,9 @@ class ChatUI {
   }
 
   /**
-   * Updates unread badge
+   * Updates unread badge. Also updates the chat button's aria-label to
+   * include the unread count, and writes to the widget's live region so
+   * screen reader users are notified of new messages while the chat is closed.
    */
   updateUnreadBadge(count) {
     if (count > 0) {
@@ -2299,6 +2850,25 @@ class ChatUI {
     } else {
       this.elements.unreadBadge.style.display = "none";
     }
+
+    // Dynamic aria-label reflects unread count ("Open chat, 2 unread messages")
+    if (this.elements.button && !this.elements.button.classList.contains("chat-open")) {
+      const base = _t(this.options.language, "openChatAriaLabel");
+      const label = count > 0 ? `${base} (${count} ${_t(this.options.language, "unreadMessages") || "unread"})` : base;
+      this.elements.button.setAttribute("aria-label", label);
+    }
+
+    // Announce new messages to assistive tech via the widget's live region.
+    // Only announce when count increases to avoid repeat announcements on re-render.
+    if (count > 0 && count !== this._lastAnnouncedUnread && this.elements.srLive) {
+      this.elements.srLive.textContent = "";
+      setTimeout(() => {
+        if (this.elements.srLive) {
+          this.elements.srLive.textContent = _t(this.options.language, "newMessageAnnouncement") || "New message from assistant";
+        }
+      }, 50);
+    }
+    this._lastAnnouncedUnread = count;
   }
 
   /**
@@ -2307,8 +2877,16 @@ class ChatUI {
   clearInput() {
     this.elements.input.value = "";
     this._autoResizeInput();
+    this._syncInputPadding();
     this.elements.sendBtn.setAttribute("aria-disabled", "true");
     this.elements.sendBtn.setAttribute("tabindex", "-1");
+  }
+
+  /**
+   * Re-runs the viewport handler after textarea shrinks on send to prevent a layout jump.
+   */
+  _syncInputPadding() {
+    if (this._viewportHandler) this._viewportHandler();
   }
 
   /**
@@ -2321,7 +2899,7 @@ class ChatUI {
       enabled ? "false" : "true",
     );
     this.elements.sendBtn.setAttribute("tabindex", enabled ? "0" : "-1");
-    if (enabled) {
+    if (enabled && window.innerWidth > SIZES.MOBILE_BREAKPOINT) {
       this.elements.input.focus();
     }
   }
@@ -2372,10 +2950,86 @@ class ChatUI {
   }
 
   /**
+   * Sets document background and browser chrome to match the title bar color.
+   */
+  _applyDocumentChrome(color) {
+    document.documentElement.style.background = color;
+    document.body.style.background = color;
+    this._setThemeColor(color);
+  }
+
+  _setThemeColor(color) {
+    if (!this._themeMetaEl) {
+      this._themeMetaEl = document.querySelector('meta[name="theme-color"]');
+    }
+    if (!this._themeMetaEl) {
+      this._themeMetaEl = document.createElement('meta');
+      this._themeMetaEl.name = 'theme-color';
+      document.head.appendChild(this._themeMetaEl);
+    }
+    this._themeMetaEl.content = color;
+  }
+
+  /**
+   * Sets up visualViewport listener for iOS keyboard-aware resizing
+   */
+  _setupViewportHandler() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    this._inputArea = this.elements.window.querySelector('.chat-input-area');
+    this._keyboardOpen = false;
+    this._pendingViewportRAF = false;
+
+    this._viewportHandler = () => {
+      if (window.innerWidth > SIZES.MOBILE_BREAKPOINT) return;
+      if (!this.elements.window.classList.contains('open')) return;
+      if (this._pendingViewportRAF) return;
+
+      this._pendingViewportRAF = true;
+      requestAnimationFrame(() => {
+        this._pendingViewportRAF = false;
+        const keyboardOffset = window.innerHeight - vv.height - vv.offsetTop;
+        const isOpen = keyboardOffset > 100;
+
+        if (isOpen) {
+          const inputHeight = this._inputArea ? this._inputArea.offsetHeight : 60;
+          if (this._inputArea) {
+            this._inputArea.style.bottom = (keyboardOffset + 4) + 'px';
+          }
+          this.elements.messages.style.paddingBottom = (keyboardOffset + inputHeight + 16) + 'px';
+          if (!this._keyboardOpen) {
+            this.elements.messages.scrollTop = this.elements.messages.scrollHeight;
+          }
+          this._keyboardOpen = true;
+        } else if (this._keyboardOpen) {
+          if (this._inputArea) this._inputArea.style.bottom = '';
+          this.elements.messages.style.paddingBottom = '';
+          this._keyboardOpen = false;
+        }
+      });
+    };
+
+    vv.addEventListener('resize', this._viewportHandler);
+    vv.addEventListener('scroll', this._viewportHandler);
+  }
+
+  /**
    * Binds event listeners
    */
   _bindEvents() {
     this._handlers = {};
+
+    // Track keyboard vs mouse navigation so the input container focus ring
+    // only appears during keyboard use (Tab), not on click or programmatic focus.
+    this._handlers.keyboardNavOn = (e) => {
+      if (e.key === "Tab") this.elements.window.classList.add("keyboard-nav");
+    };
+    this._handlers.keyboardNavOff = () => {
+      this.elements.window.classList.remove("keyboard-nav");
+    };
+    document.addEventListener("keydown", this._handlers.keyboardNavOn);
+    document.addEventListener("mousedown", this._handlers.keyboardNavOff);
 
     this._handlers.buttonClick = () => {
       this.eventBus.emit("toggle");
@@ -2391,6 +3045,13 @@ class ChatUI {
       this.eventBus.emit("clear");
     };
     this.elements.clearBtn.addEventListener("click", this._handlers.clearClick);
+
+    if (this.elements.privateBtn) {
+      this._handlers.privateClick = () => {
+        this.eventBus.emit("togglePrivate");
+      };
+      this.elements.privateBtn.addEventListener("click", this._handlers.privateClick);
+    }
 
     this._handlers.sendClick = () => {
       if (this.elements.sendBtn.getAttribute("aria-disabled") !== "true") {
@@ -2427,24 +3088,20 @@ class ChatUI {
     };
     this.elements.input.addEventListener("input", this._handlers.inputInput);
 
-    // iOS keyboard handling
+    // Mobile keyboard handling — visualViewport manages container + input positioning
+    this._setupViewportHandler();
+
     this._handlers.inputFocus = () => {
-      setTimeout(() => {
-        this.elements.input.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        });
-        if (window.innerWidth <= SIZES.MOBILE_BREAKPOINT) {
-          this.elements.messages.style.paddingBottom = `${SIZES.MOBILE_PADDING_BOTTOM}px`;
-        }
-      }, TIMINGS.IOS_KEYBOARD_DELAY);
+      if (window.innerWidth <= SIZES.MOBILE_BREAKPOINT) {
+        setTimeout(() => {
+          this._scrollToBottom();
+        }, TIMINGS.IOS_KEYBOARD_DELAY);
+      }
     };
     this.elements.input.addEventListener("focus", this._handlers.inputFocus);
 
     this._handlers.inputBlur = () => {
-      if (window.innerWidth <= SIZES.MOBILE_BREAKPOINT) {
-        this.elements.messages.style.paddingBottom = "";
-      }
+      // visualViewport resize handler restores positioning automatically
     };
     this.elements.input.addEventListener("blur", this._handlers.inputBlur);
 
@@ -2470,15 +3127,6 @@ class ChatUI {
   }
 
   /**
-   * Ensures viewport meta tag exists
-   */
-  _ensureViewportMeta() {
-    // No-op: the widget should not modify the host page's viewport meta tag.
-    // Mobile layout uses dvh units and safe-area-inset env() which work
-    // regardless of viewport-fit settings.
-  }
-
-  /**
    * Injects CSS styles
    */
   _injectStyles() {
@@ -2486,6 +3134,7 @@ class ChatUI {
     if (document.getElementById(styleId)) return;
 
     const styleGenerator = new StyleGenerator(this.options);
+    styleGenerator.injectExternalAssets();
     const styles = document.createElement("style");
     styles.id = styleId;
     styles.textContent = styleGenerator.generate();
@@ -2499,22 +3148,44 @@ class ChatUI {
     // Button
     this.elements.button = document.createElement("button");
     this.elements.button.className = "universal-chat-button";
-    this.elements.button.innerHTML = "💬";
+    this.elements.button.id = `${this._id}-btn`;
+    const btnContent = this.options.buttonContent;
+    if (this.options.buttonIconUrl) {
+      this._setButtonIcon();
+    } else {
+      this.elements.button.textContent = btnContent;
+    }
+    // Detect if content is NOT a single emoji — if text, use smaller font
+    const isSingleEmoji = /^\p{Extended_Pictographic}$/u.test(btnContent);
+    this._isTextContent = !isSingleEmoji && btnContent !== "💬" && !this.options.buttonIconUrl;
+    if (this._isTextContent) {
+      this.elements.button.classList.add("button-text-content");
+    }
     this.elements.button.setAttribute(
       "aria-label",
-      "Open chat. Press Enter to open, Escape to close",
+      _t(this.options.language, "openChatAriaLabel"),
     );
     this.elements.button.setAttribute("aria-expanded", "false");
     this.elements.button.setAttribute("aria-haspopup", "dialog");
     this.elements.button.setAttribute("tabindex", "0");
-    this.elements.button.title = "Open chat (Enter)";
+    this.elements.button.title = _t(this.options.language, "openChat");
 
-    // Unread badge
+    // Unread badge. aria-hidden because the visible count is conveyed through
+    // the button's dynamic aria-label (updated by updateUnreadBadge); this
+    // avoids duplicate announcements.
     this.elements.unreadBadge = document.createElement("span");
     this.elements.unreadBadge.className = "chat-unread-badge";
     this.elements.unreadBadge.style.display = "none";
-    this.elements.unreadBadge.setAttribute("aria-label", "unread messages");
+    this.elements.unreadBadge.setAttribute("aria-hidden", "true");
     this.elements.button.appendChild(this.elements.unreadBadge);
+
+    // Per-widget screen reader live region. Used to announce new messages
+    // while the chat is closed so users don't miss assistant replies.
+    this.elements.srLive = document.createElement("div");
+    this.elements.srLive.className = "sr-only";
+    this.elements.srLive.setAttribute("aria-live", "polite");
+    this.elements.srLive.setAttribute("aria-atomic", "true");
+    this.elements.button.appendChild(this.elements.srLive);
 
     // Typing indicator for button
     this.elements.buttonTypingIndicator = document.createElement("div");
@@ -2525,28 +3196,38 @@ class ChatUI {
     this.elements.buttonTypingIndicator.setAttribute("role", "status");
     this.elements.buttonTypingIndicator.setAttribute(
       "aria-label",
-      "Assistant is typing",
+      _t(this.options.language, "assistantTyping"),
     );
     this.elements.button.appendChild(this.elements.buttonTypingIndicator);
 
     // Window
     this.elements.window = document.createElement("div");
     this.elements.window.className = "universal-chat-window";
+    this.elements.window.id = this._id;
     this.elements.window.setAttribute("role", "dialog");
     this.elements.window.setAttribute("aria-label", this.options.title);
     this.elements.window.setAttribute("aria-modal", "false");
+    const lang = this.options.language;
+    const subtitleHtml = this.options.headerSubtitle
+      ? `<p class="chat-header-subtitle">${_renderSimpleMarkdown(this.options.headerSubtitle)}</p>`
+      : "";
+    // Note: innerHTML is used here intentionally — all dynamic values are escaped via
+    // ChatValidators.escapeHtml or _renderSimpleMarkdown (which escapes then allows only https links).
+    // Translation strings from _t() are static constants defined in TRANSLATIONS.
     this.elements.window.innerHTML = `
       <div class="chat-header">
         <div class="chat-header-info">
           <h3 id="chat-title">${ChatValidators.escapeHtml(this.options.title)}</h3>
+          ${subtitleHtml}
         </div>
         <div class="chat-header-actions">
-          <button class="chat-header-btn chat-clear-btn" title="Clear chat" aria-label="Clear chat history">↻</button>
-          <button class="chat-header-btn chat-close-btn" title="Minimize" aria-label="Close chat">×</button>
+          ${this.options.allowPrivateMode ? `<button class="chat-header-btn chat-private-btn" title="${_t(lang, "privateMode")}" aria-label="${_t(lang, "privateMode")}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></button>` : ""}
+          <button class="chat-header-btn chat-clear-btn" title="${_t(lang, "clearChat")}" aria-label="${_t(lang, "clearChatHistory")}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></button>
+          <button class="chat-header-btn chat-close-btn" title="${_t(lang, "minimize")}" aria-label="${_t(lang, "closeChat")}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       ${this.options.showModelInfo ? '<div class="model-info" id="model-info" role="status"></div>' : ""}
-      <div class="chat-messages" role="log" aria-live="polite" aria-atomic="false" aria-label="Chat conversation"></div>
+      <div class="chat-messages" role="log" aria-live="polite" aria-atomic="false" aria-label="${_t(lang, "chatConversation")}"></div>
       <div class="chat-input-area">
         <div class="chat-input-container">
           <textarea
@@ -2554,17 +3235,46 @@ class ChatUI {
             placeholder="${ChatValidators.escapeHtml(this.options.placeholder)}"
             maxlength="${LIMITS.MAX_MESSAGE_LENGTH}"
             rows="1"
-            aria-label="Type your message. Press Enter to send, Shift+Enter for new line"
+            aria-label="${_t(lang, "inputAriaLabel")}"
             aria-describedby="char-limit keyboard-hints"></textarea>
-          <button class="chat-send-btn" tabindex="-1" aria-disabled="true" aria-label="Send message (Enter)">Send</button>
+          <button class="chat-send-btn" tabindex="-1" aria-disabled="true" aria-label="${_t(lang, "sendAriaLabel")}">${_t(lang, "send")}</button>
         </div>
-        <div id="char-limit" class="sr-only">Maximum ${LIMITS.MAX_MESSAGE_LENGTH} characters</div>
-        <div id="keyboard-hints" class="sr-only">Keyboard shortcuts: Enter to send, Shift+Enter for new line, Escape to close chat</div>
+        <div id="char-limit" class="sr-only">${_t(lang, "charLimit")}</div>
+        <div id="keyboard-hints" class="sr-only">${_t(lang, "keyboardHints")}</div>
       </div>
     `;
 
-    document.body.appendChild(this.elements.button);
-    document.body.appendChild(this.elements.window);
+    const isIframe = this.options.mode === "iframe";
+    const isInline = this.options.mode === "inline";
+    if (isIframe || isInline) {
+      const closeBtn = this.elements.window.querySelector(".chat-close-btn");
+      if (closeBtn) { closeBtn.style.display = "none"; closeBtn.setAttribute("tabindex", "-1"); }
+    }
+    if (isIframe) {
+      this.elements.window.classList.add("open", "iframe-mode");
+      this._applyDocumentChrome(this.options.titleBackgroundColor);
+    } else if (isInline) {
+      this.elements.window.classList.add("open", "inline-mode");
+    }
+
+    if (!isIframe && !isInline) {
+      document.body.appendChild(this.elements.button);
+    }
+    let mountTarget = document.body;
+    if (isInline) {
+      const container = this.options.container;
+      if (typeof container === "string") {
+        mountTarget = document.querySelector(container) || document.body;
+      } else if (container instanceof HTMLElement) {
+        mountTarget = container;
+      } else if (this._scriptElement?.parentElement) {
+        mountTarget = this._scriptElement.parentElement;
+      }
+    }
+    mountTarget.appendChild(this.elements.window);
+    requestAnimationFrame(() => {
+      this.elements.window.classList.add("chat-ready");
+    });
 
     this.elements.messages =
       this.elements.window.querySelector(".chat-messages");
@@ -2575,7 +3285,41 @@ class ChatUI {
       this.elements.window.querySelector(".chat-close-btn");
     this.elements.clearBtn =
       this.elements.window.querySelector(".chat-clear-btn");
+    this.elements.privateBtn =
+      this.elements.window.querySelector(".chat-private-btn");
     this.elements.modelInfo = this.elements.window.querySelector("#model-info");
+  }
+
+  /**
+   * Applies or removes private mode visual indicators (button state,
+   * placeholder text, window outline).
+   */
+  setPrivateMode(active, borderColor) {
+    if (!this.options.allowPrivateMode) return;
+    const lang = this.options.language;
+    const btn = this.elements.privateBtn;
+    if (btn) {
+      const svg = btn.querySelector("svg");
+      if (svg) {
+        svg.setAttribute("fill", active ? "currentColor" : "none");
+      }
+      btn.title = active ? _t(lang, "privateModeOn") : _t(lang, "privateMode");
+      btn.setAttribute("aria-label", btn.title);
+    }
+    // Update placeholder
+    if (this.elements.input) {
+      this.elements.input.placeholder = active
+        ? _t(lang, "privatePlaceholder")
+        : this.options.placeholder;
+    }
+    // Update border
+    if (this.elements.window) {
+      if (active && borderColor !== "transparent") {
+        this.elements.window.style.outline = `2px solid ${borderColor}`;
+      } else {
+        this.elements.window.style.outline = "";
+      }
+    }
   }
 
   /**
@@ -2587,6 +3331,12 @@ class ChatUI {
 
     if (this.previewTimeout) {
       clearTimeout(this.previewTimeout);
+    }
+
+    // Clean up visualViewport listener
+    if (this._viewportHandler && window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this._viewportHandler);
+      window.visualViewport.removeEventListener('scroll', this._viewportHandler);
     }
 
     if (this.accessibilityManager) {
@@ -2611,6 +3361,12 @@ class ChatUI {
         this.elements.clearBtn.removeEventListener(
           "click",
           this._handlers.clearClick,
+        );
+      }
+      if (this.elements.privateBtn && this._handlers.privateClick) {
+        this.elements.privateBtn.removeEventListener(
+          "click",
+          this._handlers.privateClick,
         );
       }
       if (this.elements.sendBtn) {
@@ -2638,7 +3394,14 @@ class ChatUI {
         );
       }
       document.removeEventListener("keydown", this._handlers.documentEscape);
+      document.removeEventListener("keydown", this._handlers.keyboardNavOn);
+      document.removeEventListener("mousedown", this._handlers.keyboardNavOff);
       this._handlers = null;
+    }
+
+    if (this._themeMetaEl) {
+      this._themeMetaEl.remove();
+      this._themeMetaEl = null;
     }
 
     if (this.elements.button) this.elements.button.remove();
@@ -2664,10 +3427,50 @@ class UniversalChatWidget {
   constructor(options = {}) {
     // Generate unique instance ID for multi-instance support
     this._instanceId = `chat-${UniversalChatWidget._instanceCount++}`;
+    // Capture script element now (unavailable after async operations)
+    this._scriptElement = document.currentScript;
 
+    if (options.configUrl) {
+      // Fetch remote config, then initialize — hide widget on failure
+      this._initFromRemoteConfig(options);
+    } else {
+      this._initWidget(options);
+    }
+  }
+
+  /**
+   * Fetches config from remote URL, merges with local options, then initializes.
+   * If fetch fails, the widget is never created (hidden).
+   */
+  async _initFromRemoteConfig(options) {
+    try {
+      const resp = await fetch(options.configUrl);
+      if (!resp.ok) throw new Error(`Config fetch failed: ${resp.status}`);
+      const remoteConfig = await resp.json();
+      // Remote config is base, local options override
+      const merged = { ...remoteConfig, ...options };
+      delete merged.configUrl;
+      this._initWidget(merged);
+    } catch (e) {
+      if (options.debug) {
+        console.warn(`[ChatWidget] Failed to load config from ${options.configUrl}:`, e);
+      }
+      // Widget stays hidden — never created
+    }
+  }
+
+  /**
+   * Core initialization — called directly or after remote config fetch.
+   */
+  _initWidget(options) {
     // Normalize and validate options
     this.options = this._normalizeOptions(options);
-    this.options._instanceId = this._instanceId;
+    this.options._instanceId = `${this._instanceId}_${this.options.model}`;
+
+    // WCAG contrast sanity check. Developer-facing safeguard: logs a warning
+    // if any configured text/background pair falls below the AA threshold
+    // (4.5:1 for body text). Does NOT block rendering.
+    ColorUtils.warnLowContrast(this.options);
 
     // Initialize core components
     this.eventBus = new EventBus();
@@ -2675,6 +3478,7 @@ class UniversalChatWidget {
     this.api = new ChatAPI(this.options.apiEndpoint, this.options.model, {
       debug: this.options.debug,
       timeout: this.options.requestTimeout,
+      language: this.options.language,
     });
     this.renderer = new MessageRenderer(this.options);
     this.ui = new ChatUI(this.options, this.eventBus);
@@ -2685,17 +3489,23 @@ class UniversalChatWidget {
     // Initialize UI
     this.ui.init();
 
-    // Restore state or show welcome
-    if (this.state.restore()) {
-      this._rebuildMessagesFromHistory();
-    } else {
-      this._showWelcomeMessage();
-    }
+    // Load marked.js, then render messages (restored history or defer welcome)
+    this.renderer._loadRenderer().then(() => {
+      if (this.state.restore()) {
+        this._rebuildMessagesFromHistory();
+        // Restore private mode visuals if active
+        if (this.state.get("privateMode")) {
+          this.ui.setPrivateMode(true, this.options.privateModeBorderColor);
+        }
+      } else {
+        this._needsWelcome = true;
+      }
 
-    // Auto-open if configured
-    if (this.options.startOpen && !this.state.get("hasInteracted")) {
-      setTimeout(() => this._handleOpen(), TIMINGS.START_OPEN_DELAY);
-    }
+      // Auto-open if configured
+      if (this.options.startOpen && !this.state.get("hasInteracted")) {
+        setTimeout(() => this._handleOpen(), TIMINGS.START_OPEN_DELAY);
+      }
+    });
   }
 
   /**
@@ -2711,9 +3521,10 @@ class UniversalChatWidget {
     this.eventBus.on("clear", () => this._handleClear());
     this.eventBus.on("send", (message) => this._handleSend(message));
     this.eventBus.on("retry", () => this._handleRetry());
+    this.eventBus.on("togglePrivate", () => this._handleTogglePrivate());
 
     // Subscribe to state changes
-    this.state.subscribe((newState, oldState) => {
+    this._stateUnsub = this.state.subscribe((newState, oldState) => {
       if (newState.isOpen !== oldState.isOpen) {
         newState.isOpen ? this.ui.open() : this.ui.close();
       }
@@ -2722,8 +3533,14 @@ class UniversalChatWidget {
         this.ui.updateUnreadBadge(newState.unreadCount);
       }
 
-      // Save state on any change
-      this.state.save();
+      // Only save when persisted fields change
+      if (newState.history !== oldState.history ||
+          newState.hasInteracted !== oldState.hasInteracted ||
+          newState.traceId !== oldState.traceId ||
+          newState.sessionId !== oldState.sessionId ||
+          newState.privateMode !== oldState.privateMode) {
+        this.state.save();
+      }
     });
   }
 
@@ -2736,12 +3553,20 @@ class UniversalChatWidget {
       hasInteracted: true,
       unreadCount: 0,
     });
+    if (this._needsWelcome) {
+      this._needsWelcome = false;
+      this._showWelcomeMessage();
+    }
+    this._trackEvent('chat_open');
   }
 
   /**
    * Handles closing chat
    */
   _handleClose() {
+    this._trackEvent('chat_close', {
+      messages: this.state.get('history').length,
+    });
     this.state.update({ isOpen: false });
   }
 
@@ -2749,9 +3574,37 @@ class UniversalChatWidget {
    * Handles clearing chat
    */
   _handleClear() {
+    this._trackEvent('chat_cleared', {
+      messages: this.state.get('history').length,
+    });
     this.state.update({ history: [], traceId: null });
     this.ui.clearMessages();
     this._showWelcomeMessage();
+  }
+
+  /**
+   * Tracks analytics events via Umami, Plausible, or custom callback
+   */
+  _trackEvent(name, data = {}) {
+    if (typeof this.options.onEvent === 'function') {
+      try { this.options.onEvent(name, data); } catch (_) {}
+    }
+
+    if (this.options.analytics === false) return;
+
+    if (typeof window.umami !== 'undefined' && typeof window.umami.track === 'function') {
+      try { window.umami.track(name, data); } catch (_) {}
+    }
+
+    if (typeof window.plausible === 'function') {
+      try { window.plausible(name, { props: data }); } catch (_) {}
+    }
+  }
+
+  _handleTogglePrivate() {
+    const newVal = !this.state.get("privateMode");
+    this.state.update({ privateMode: newVal });
+    this.ui.setPrivateMode(newVal, this.options.privateModeBorderColor);
   }
 
   /**
@@ -2767,14 +3620,12 @@ class UniversalChatWidget {
 
     // Add user message to state and UI (skip if retry — already in history)
     if (!isRetry) {
-      const history = [
-        ...this.state.get("history"),
-        { role: "user", content: message },
-      ];
+      const history = [...this.state.get("history"), { role: "user", content: message }];
       this.state.update({ history });
 
       const formatted = this.renderer.formatMessage(message);
       this.ui.addMessage("user", formatted, this._formatTime(new Date()));
+      this._trackEvent('chat_message_sent', { length: message.length });
     }
 
     this.ui.clearInput();
@@ -2784,34 +3635,154 @@ class UniversalChatWidget {
       this.ui.showButtonTyping();
     }
 
+    const sendTimestamp = Date.now();
+
+    // Use streaming by default; fall back to non-streaming if stream option is explicitly false
+    if (this.options.stream !== false) {
+      await this._handleSendStreaming(message, sendTimestamp);
+    } else {
+      await this._handleSendNonStreaming(message, sendTimestamp);
+    }
+  }
+
+  /**
+   * Streaming send path — progressive token display with debounced markdown render
+   */
+  async _handleSendStreaming(message, sendTimestamp) {
+    const optimizedHistory = this.state.optimizeHistory();
+    let rawText = "";
+    let pendingSources = [];
+    let assistantEl = null;
+    let bubbleEl = null;
+    let debounceTimer = null;
+    let streamErrorOccurred = false;
+    let doneWasCalled = false;
+
+    const renderContent = () => {
+      if (!bubbleEl || !bubbleEl.isConnected) return;
+      // Read scroll position before DOM write to avoid layout thrashing
+      const msgs = this.ui.elements.messages;
+      const isNearBottom = msgs.scrollTop + msgs.clientHeight >= msgs.scrollHeight - 60;
+      bubbleEl.innerHTML = this.renderer.formatMessage(rawText); // existing sanitized render
+      if (isNearBottom) {
+        this.ui._scrollToBottom();
+      }
+    };
+
     try {
-      // Optimize history and send
+      await this.api.sendMessageStreaming(
+        message,
+        optimizedHistory,
+        this.state.get("traceId"),
+        this.state.get("sessionId"),
+        this.state.get("privateMode"),
+        {
+          onDelta: (content) => {
+            if (!assistantEl) {
+              this.ui.hideTyping();
+              this.ui.hideButtonTyping();
+              assistantEl = this.ui.addStreamingMessage(this._formatTime(new Date()));
+              bubbleEl = assistantEl.querySelector(".message-bubble");
+            }
+            rawText += content;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(renderContent, 80);
+          },
+
+          onSources: (sources) => {
+            pendingSources = Array.isArray(sources) ? sources : [];
+          },
+
+          onDone: (payload) => {
+            if (streamErrorOccurred) return;
+            doneWasCalled = true;
+            clearTimeout(debounceTimer);
+
+            if (!assistantEl) {
+              this.ui.hideTyping();
+              this.ui.hideButtonTyping();
+              assistantEl = this.ui.addStreamingMessage(this._formatTime(new Date()));
+              bubbleEl = assistantEl.querySelector(".message-bubble");
+            }
+
+            renderContent();
+            this.renderer.addCopyButtonsToCodeBlocks(assistantEl);
+            this.renderer.renderCitations(assistantEl, pendingSources);
+
+            this._onResponseComplete(rawText, {
+              traceId: payload.traceId,
+              sessionId: payload.sessionId,
+              model: payload.model,
+            }, sendTimestamp);
+          },
+
+          onError: (error) => {
+            streamErrorOccurred = true;
+            console.error("Streaming error:", error);
+            clearTimeout(debounceTimer);
+
+            if (assistantEl && rawText) {
+              renderContent();
+              const errorNotice = document.createElement("div");
+              errorNotice.className = "stream-error-notice";
+              errorNotice.textContent = error.message || _t(this.options.language, "errorStreamLost");
+              if (bubbleEl) bubbleEl.appendChild(errorNotice);
+
+              this.state.update({
+                history: [
+                  ...this.state.get("history"),
+                  { role: "assistant", content: rawText },
+                ],
+                lastFailedMessage: null,
+              });
+            } else {
+              this._onSendError(message, error);
+            }
+          },
+        },
+      );
+
+      // Fallback: stream ended without any callbacks firing (e.g. non-SSE response)
+      if (!rawText && !streamErrorOccurred && !assistantEl) {
+        const noCallbackError = new Error("No response received from server");
+        noCallbackError.errorInfo = { type: "parse", message: _t(this.options.language, "errorUnknown") };
+        this._onSendError(message, noCallbackError);
+      }
+      // Fallback: stream ended with content but onDone never fired
+      if (rawText && !streamErrorOccurred && !doneWasCalled && assistantEl) {
+        clearTimeout(debounceTimer);
+        renderContent();
+        this.renderer.addCopyButtonsToCodeBlocks(assistantEl);
+        this.renderer.renderCitations(assistantEl, pendingSources);
+        this._onResponseComplete(rawText, {
+          traceId: this.state.get("traceId"),
+          sessionId: this.state.get("sessionId"),
+        }, sendTimestamp);
+      }
+    } catch (error) {
+      if (!streamErrorOccurred) {
+        this._onSendError(message, error);
+      }
+    } finally {
+      this.state.update({ isSending: false });
+      this.ui.setInputEnabled(true);
+    }
+  }
+
+  /**
+   * Non-streaming send path (original behavior, used when stream option is false)
+   */
+  async _handleSendNonStreaming(message, sendTimestamp) {
+    try {
       const optimizedHistory = this.state.optimizeHistory();
       const response = await this.api.sendMessage(
         message,
         optimizedHistory,
         this.state.get("traceId"),
+        this.state.get("sessionId"),
+        this.state.get("privateMode"),
       );
 
-      // Update state with response
-      this.state.update({
-        history: [
-          ...this.state.get("history"),
-          { role: "assistant", content: response.content },
-        ],
-        traceId: response.traceId,
-        lastFailedMessage: null,
-      });
-
-      // Trim if needed
-      this.state.trimHistory();
-
-      // Update model info if available
-      if (this.ui.elements.modelInfo && response.model) {
-        this.ui.elements.modelInfo.textContent = `Model: ${response.model}`;
-      }
-
-      // Render response
       this.ui.hideTyping();
       this.ui.hideButtonTyping();
       const formattedResponse = this.renderer.formatMessage(response.content);
@@ -2821,33 +3792,68 @@ class UniversalChatWidget {
         this._formatTime(new Date()),
       );
 
-      // Add enhancements
       this.renderer.addCopyButtonsToCodeBlocks(assistantEl);
-      await this.renderer.renderLatex(assistantEl);
       this.renderer.renderCitations(assistantEl, response.sources);
 
-      // Handle unread if closed
-      if (!this.state.get("isOpen")) {
-        this.state.update({
-          unreadCount: this.state.get("unreadCount") + 1,
-        });
-        this.ui.showMessagePreview(response.content);
-        this.ui.pulseButton();
-      }
+      this._onResponseComplete(response.content, {
+        traceId: response.traceId,
+        sessionId: response.sessionId,
+        model: response.model,
+      }, sendTimestamp);
     } catch (error) {
-      console.error("Chat error:", error);
-      this.ui.hideTyping();
-      this.ui.hideButtonTyping();
-      this.state.update({ lastFailedMessage: message });
-
-      const errorInfo = error.errorInfo || {
-        message: "Something went wrong. Please try again.",
-      };
-      this.ui.showError(errorInfo.message);
+      this._onSendError(message, error);
     } finally {
       this.state.update({ isSending: false });
       this.ui.setInputEnabled(true);
     }
+  }
+
+  /**
+   * Shared post-response state update and UI bookkeeping
+   */
+  _onResponseComplete(content, { traceId, sessionId, model }, sendTimestamp) {
+    this.state.update({
+      history: [
+        ...this.state.get("history"),
+        { role: "assistant", content },
+      ],
+      traceId: traceId || this.state.get("traceId"),
+      sessionId: sessionId || this.state.get("sessionId"),
+      lastFailedMessage: null,
+    });
+    this.state.trimHistory();
+
+    if (this.ui.elements.modelInfo && model) {
+      this.ui.elements.modelInfo.textContent = `Model: ${model}`;
+    }
+
+    this._trackEvent('chat_response_received', {
+      latency: Date.now() - sendTimestamp,
+      model: model || this.options.model,
+    });
+
+    if (!this.state.get("isOpen")) {
+      this.state.update({
+        unreadCount: this.state.get("unreadCount") + 1,
+      });
+      this.ui.showMessagePreview(content);
+      this.ui.pulseButton();
+    }
+  }
+
+  /**
+   * Shared error handler for both send paths
+   */
+  _onSendError(message, error) {
+    console.error("Chat error:", error);
+    this.ui.hideTyping();
+    this.ui.hideButtonTyping();
+    this.state.update({ lastFailedMessage: message });
+    this._trackEvent('chat_error', { type: error.message || 'unknown' });
+    const errorInfo = error.errorInfo || {
+      message: _t(this.options.language, "errorUnknown"),
+    };
+    this.ui.showError(errorInfo.message);
   }
 
   /**
@@ -2864,15 +3870,27 @@ class UniversalChatWidget {
    * Shows welcome message
    */
   _showWelcomeMessage() {
-    const formatted = this.renderer.formatMessage(this.options.welcomeMessage);
-    const welcomeEl = this.ui.addMessage(
-      "assistant",
-      formatted,
-      this._formatTime(new Date()),
-    );
-    this.renderer.addCopyButtonsToCodeBlocks(welcomeEl);
-    this.renderer.renderLatex(welcomeEl);
-    this.renderer.renderCitations(welcomeEl, []);
+    // Random delay 1-3 seconds with typing indicator for realism
+    const delay = TIMINGS.WELCOME_DELAY_MIN + Math.random() * TIMINGS.WELCOME_DELAY_RANGE;
+    this.ui.showTyping();
+    this._welcomeTimer = setTimeout(() => {
+      this.ui.hideTyping();
+      const formatted = this.renderer.formatMessage(this.options.welcomeMessage);
+      const welcomeEl = this.ui.addMessage(
+        "assistant",
+        formatted,
+        this._formatTime(new Date()),
+      );
+      this.renderer.addCopyButtonsToCodeBlocks(welcomeEl);
+      this.renderer.renderCitations(welcomeEl, []);
+      // Add to history so LLM has context and rebuild works
+      this.state.update({
+        history: [
+          ...this.state.get("history"),
+          { role: "assistant", content: this.options.welcomeMessage },
+        ],
+      });
+    }, delay);
   }
 
   /**
@@ -2891,10 +3909,11 @@ class UniversalChatWidget {
             "",
           );
           this.renderer.addCopyButtonsToCodeBlocks(msgEl);
-          this.renderer.renderLatex(msgEl);
           this.renderer.renderCitations(msgEl, []);
         }
       });
+    } else {
+      this._showWelcomeMessage();
     }
   }
 
@@ -2902,52 +3921,62 @@ class UniversalChatWidget {
    * Normalizes options with defaults
    */
   _normalizeOptions(options) {
+    const lang = options.language || "en";
+    const color = (key, fallback) => ChatValidators.validateColor(options[key]) || fallback;
+    const clamp = (val, min, max, fallback) => { const n = parseFloat(val); return Math.max(min, Math.min(max, isNaN(n) ? fallback : n)); };
+    const clampOpt = (val, min, max) => val != null ? Math.max(min, Math.min(max, parseFloat(val))) : null;
     return {
-      title: options.title || "Course Assistant",
+      language: lang,
+      headerSubtitle: options.headerSubtitle || "",
+      title: options.title || _t(lang, "title"),
       welcomeMessage:
-        options.welcomeMessage || "Hello! How can I help you today?",
-      placeholder: options.placeholder || "Type your question...",
+        options.welcomeMessage || _t(lang, "welcomeMessage"),
+      placeholder: options.placeholder || _t(lang, "placeholder"),
       position: options.position || "bottom-right",
       apiEndpoint:
         ChatValidators.validateApiEndpoint(options.apiEndpoint) ||
         "https://your-worker.workers.dev",
       model:
         ChatValidators.validateModel(options.model) || "mistral-medium-latest",
-      titleBackgroundColor:
-        ChatValidators.validateColor(options.titleBackgroundColor) || "#363D45",
-      titleFontColor:
-        ChatValidators.validateColor(options.titleFontColor) || "#FDF8ED",
+      titleBackgroundColor: color("titleBackgroundColor", "#363D45"),
+      titleFontColor: color("titleFontColor", "#FDF8ED"),
 
-      assistantColor:
-        ChatValidators.validateColor(options.assistantColor) || "#FCCF9C",
-      assistantFontColor:
-        ChatValidators.validateColor(options.assistantFontColor) || "#3B332B",
+      assistantColor: color("assistantColor", "#FCCF9C"),
+      assistantFontColor: color("assistantFontColor", "#3B332B"),
       assistantMessageOpacity: options.assistantMessageOpacity ?? 0.9,
 
-      userColor: ChatValidators.validateColor(options.userColor) || "#A7C7C6",
-      userFontColor:
-        ChatValidators.validateColor(options.userFontColor) || "#283E3D",
+      userColor: color("userColor", "#A7C7C6"),
+      userFontColor: color("userFontColor", "#283E3D"),
       userMessageOpacity: options.userMessageOpacity ?? 0.9,
 
-      chatBackground:
-        ChatValidators.validateColor(options.chatBackground) || "#ffffff",
-      stampColor: ChatValidators.validateColor(options.stampColor) || "#DB6B6B",
-      codeBackgroundColor:
-        ChatValidators.validateColor(options.codeBackgroundColor) || "#FFEEE2",
+      chatBackground: color("chatBackground", "#ffffff"),
+      stampColor: color("stampColor", "#DB6B6B"),
+      codeBackgroundColor: color("codeBackgroundColor", "#FFEEE2"),
       codeOpacity: options.codeOpacity ?? 0.9,
-      codeTextColor:
-        ChatValidators.validateColor(options.codeTextColor) || "#537E8F",
+      codeTextColor: color("codeTextColor", "#537E8F"),
 
-      borderColor:
-        ChatValidators.validateColor(options.borderColor) || "#363D45",
-      buttonIconColor:
-        ChatValidators.validateColor(options.buttonIconColor) || "#363D45",
-      scrollbarColor:
-        ChatValidators.validateColor(options.scrollbarColor) || "#FDF8ED",
-      inputTextColor:
-        ChatValidators.validateColor(options.inputTextColor) || "#363D45",
+      subtitleColor: color("subtitleColor", null),
+      subtitleFontSize: clamp(options.subtitleFontSize, 0.5, 0.8, 0.65),
+      windowBorderColor: color("windowBorderColor", "transparent"),
+      headerBorderColor: color("headerBorderColor", "#363D45"),
+      assistantBubbleBorderColor: color("assistantBubbleBorderColor", "#363D45"),
+      userBubbleBorderColor: color("userBubbleBorderColor", "#363D45"),
+      inputBorderColor: color("inputBorderColor", "#363D45"),
+      codeBorderColor: color("codeBorderColor", "#363D45"),
+      citationBorderColor: color("citationBorderColor", "#363D45"),
+      buttonIconColor: color("buttonIconColor", "#363D45"),
+      scrollbarColor: color("scrollbarColor", "#FDF8ED"),
+      inputTextColor: color("inputTextColor", "#363D45"),
 
       inputAreaOpacity: options.inputAreaOpacity ?? 0.95,
+      buttonShadowIntensity: clamp(options.buttonShadowIntensity, 0, 1, 1.0),
+      windowShadowIntensity: clamp(options.windowShadowIntensity, 0, 1, 1.0),
+      inputShadowIntensity: clampOpt(options.inputShadowIntensity, 0, 1),
+      borderRadius: Math.max(0, Math.min(SIZES.MAX_BORDER_RADIUS, parseInt(options.borderRadius) || 0)),
+      buttonInactiveColor: color("buttonInactiveColor", null),
+      buttonActiveColor: color("buttonActiveColor", null),
+      buttonContent: (typeof options.buttonContent === "string" ? options.buttonContent.slice(0, 10) : "") || "💬",
+      buttonIconUrl: typeof options.buttonIconUrl === "string" && options.buttonIconUrl ? options.buttonIconUrl : null,
       startOpen: options.startOpen ?? false,
       buttonSize: options.buttonSize ?? SIZES.BUTTON_SIZE,
       windowWidth: options.windowWidth ?? SIZES.WINDOW_WIDTH,
@@ -2958,8 +3987,15 @@ class UniversalChatWidget {
         options.alwaysKeepRecentMessages ?? LIMITS.ALWAYS_KEEP_RECENT,
       maxHistoryMessages:
         options.maxHistoryMessages ?? LIMITS.MAX_HISTORY_MESSAGES,
+      stream: options.stream ?? true,
       debug: options.debug ?? false,
-      requestTimeout: options.requestTimeout ?? 30000,
+      requestTimeout: options.requestTimeout ?? TIMINGS.REQUEST_TIMEOUT,
+      mode: options.mode || "floating",
+      container: options.container || null,
+      allowPrivateMode: options.allowPrivateMode ?? false,
+      privateModeBorderColor: color("privateModeBorderColor", "transparent"),
+      analytics: options.analytics ?? true,
+      onEvent: typeof options.onEvent === 'function' ? options.onEvent : null,
     };
   }
 
@@ -2967,7 +4003,7 @@ class UniversalChatWidget {
    * Formats time
    */
   _formatTime(date) {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return _timeFormatter.format(date);
   }
 
   /**
@@ -2981,16 +4017,15 @@ class UniversalChatWidget {
    * Destroys widget
    */
   destroy() {
-    this.eventBus.clear();
-    this.ui.destroy();
+    clearTimeout(this._welcomeTimer);
+    if (this.api) this.api.cancel();
+    if (this.eventBus) this.eventBus.clear();
+    if (this.ui) this.ui.destroy();
+    if (this._stateUnsub) this._stateUnsub();
     this.state = null;
     this.api = null;
     this.renderer = null;
     this.eventBus = null;
-
-    if (this.options.debug) {
-      console.log("Chat widget destroyed and cleaned up");
-    }
   }
 }
 
@@ -3017,3 +4052,4 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.UniversalChatWidget = UniversalChatWidget;
+})();

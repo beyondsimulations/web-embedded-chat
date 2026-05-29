@@ -57,10 +57,9 @@ The prompt is only half the work. The model behind it matters at least as much: 
 - **Streaming** - SSE streaming when the upstream supports it; non-streaming fallback otherwise
 - **Telemetry logging** - every request/response pair is logged to PostgreSQL with trace IDs, latency, and token counts
 - **Telemetry dashboard** - single-page app with overview stats, conversation browser, analytics (heatmaps, latency distribution, engagement metrics), full-text search, and data export
-- **Semester-scoped pseudonymous IDs** - user IDs are `SHA-256(IP || "|" || SEMESTER)`; rotate the `SEMESTER` salt and a new cohort gets a disjoint ID space, so prior semesters cannot be joined to the current one
+- **Semester-scoped pseudonymous IDs** - rotated per teaching semester (see [Privacy](#privacy) below)
 - **Rate limiting** - 50 req/min per IP on chat, 5 attempts/min on login
 - **Embeddable widget** - `floating-chat.js` provides a drop-in chat UI with 40+ customization options, markdown, LaTeX, and code blocks
-- **Optional database** - runs without PostgreSQL (telemetry silently disabled)
 
 ## Quick Start
 
@@ -230,7 +229,7 @@ A few constraints are baked into the service because it talks to students, and I
 
 ## Acknowledgments
 
-Thanks to the Claussen-Simon-Stiftung for funding the wider research project this infrastructure is part of, and to the student assistant working with me from September 2025 through March 2026 on prompt iteration, focus group sessions, and integrating the course content.
+Thanks to the student assistant working with me from September 2025 through March 2026 on prompt iteration, focus group sessions, and integrating the course content.
 
 The Socratic side of the system draws on the standard typology of Socratic questions (clarification, assumptions, reasons, perspectives, implications) adapted to the specific places where students get stuck in optimization modelling.
 

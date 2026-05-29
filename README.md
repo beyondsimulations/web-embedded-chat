@@ -10,13 +10,11 @@ The work is funded by the [Claussen-Simon-Stiftung](https://www.claussen-simon-s
 
 The aim is a Socratic tutoring chatbot for the *Applied Optimization* module that prompts students to reason through optimization modelling rather than handing them solutions. The live deployment is at https://beyondsimulations.github.io/Applied-Optimization/.
 
-I run this as a **design-based research (DBR) project**. In practice that means the chatbot gets designed, deployed in actual teaching, studied (focus groups at three points in the semester, an anonymous feedback channel, and the telemetry this backend collects), and then revised before the next cycle. That iteration loop is why the backend looks the way it does. I needed something I could deploy across semesters and audit, and a black-box widget pointed at a vendor would not have given me that.
+I run this as a **design-based research (DBR) project**. In practice that means the chatbot gets designed, deployed in actual teaching, studied, and then revised before the next cycle.
 
-## What this repo is, and what it isn't
+The project is based on [OpenWebUI](https://openwebui.com/), which serves as the chat backend itself: it exposes the OpenAI-compatible API the embedded widget talks to and handles the RAG integration over the course materials. That was enough to put the tutor in front of students quickly and start collecting feedback.
 
-The delivery layer. A Rust service that authenticates the widget, rate-limits abuse, logs telemetry, and forwards chat requests upstream.
-
-The Socratic prompting, the question typology, the course content, and the retrieval setup all live elsewhere. The pedagogy gets reworked between DBR cycles, and the infrastructure should not have to move with it.
+This repo is a separate layer that sits in front of the backend and gives me the telemetry, rate limiting, semester-scoped pseudonymous IDs, and audit hooks. The chat intelligence, system prompts, RAG, model choice, still lives in the upstream backend; none of it happens in this proxy.
 
 ### Example: the current Socratic system prompt
 
@@ -51,7 +49,7 @@ You are a personal tutor in applied optimization with the programming language J
 The user has already been shown this welcome message: "How can I help?" Do not repeat it. The conversation starts with the user's first message.
 ```
 
-The prompt is only half the work. The model behind it matters at least as much: a weaker model reads this as a vague set of preferences and ignores most of it, while a stronger one actually conducts something that looks like a Socratic dialogue. A surprising share of the DBR iteration is spent on which model the backend points at, not only on what to put in this prompt.
+The prompt is only half the work. The model behind it matters at least as much: a weaker model reads this as a vague set of preferences and ignores most of it, while a stronger one actually conducts something that looks like a Socratic dialogue. Currently, I'm really happy with Mistral Medium 3.5.
 
 ## Features
 
@@ -59,7 +57,7 @@ The prompt is only half the work. The model behind it matters at least as much: 
 - **Streaming** - SSE streaming when the upstream supports it; non-streaming fallback otherwise
 - **Telemetry logging** - every request/response pair is logged to PostgreSQL with trace IDs, latency, and token counts
 - **Telemetry dashboard** - single-page app with overview stats, conversation browser, analytics (heatmaps, latency distribution, engagement metrics), full-text search, and data export
-- **Semester-scoped pseudonymous IDs** - user IDs are SHA-256 hashes of (IP + semester); a new semester means new IDs, so prior cohorts cannot be joined to the current one
+- **Semester-scoped pseudonymous IDs** - user IDs are `SHA-256(IP || "|" || SEMESTER)`; rotate the `SEMESTER` salt and a new cohort gets a disjoint ID space, so prior semesters cannot be joined to the current one
 - **Rate limiting** - 50 req/min per IP on chat, 5 attempts/min on login
 - **Embeddable widget** - `floating-chat.js` provides a drop-in chat UI with 40+ customization options, markdown, LaTeX, and code blocks
 - **Optional database** - runs without PostgreSQL (telemetry silently disabled)
@@ -97,12 +95,16 @@ cargo run --bin chatbot
 | `OPENAI_API_KEY` | Yes | -- | Bearer token for the upstream AI API |
 | `OPENAI_API_URL` | Yes | -- | Chat completions endpoint URL |
 | `PORT` | No | `3000` | Server listen port |
-| `ALLOWED_ORIGINS` | No | `Any` | Comma-separated CORS origins |
+| `ALLOWED_ORIGINS` | No | `Any` | Comma-separated CORS origins; `Any` or `*` opens CORS to any origin |
 | `POSTGRES_PASSWORD` | Docker only | -- | PostgreSQL password (docker-compose builds `DATABASE_URL` from this) |
 | `DATABASE_URL` | No | -- | PostgreSQL connection string (omit to disable telemetry) |
 | `DASHBOARD_USER` | No | `admin` | Telemetry dashboard login username |
 | `DASHBOARD_PASSWORD` | Yes* | -- | Telemetry dashboard login password (*or provide `DASHBOARD_PASSWORD_HASH`) |
 | `DASHBOARD_PASSWORD_HASH` | No | -- | Pre-computed Argon2 hash (use `cargo run --bin hash_password`) |
+| `SEMESTER` | No | empty | Salt mixed into the SHA-256 user ID hash; rotate between semesters to give each cohort a disjoint ID space (a warning is logged if unset) |
+| `MAX_TOKENS` | No | `10000` | Cap on `max_tokens` forwarded to the upstream |
+| `REQUEST_TIMEOUT_SECS` | No | `240` | HTTP client timeout for upstream calls |
+| `SECURE_COOKIES` | No | `true` | Set to `false` for local HTTP development |
 
 ## API
 
@@ -152,15 +154,22 @@ Returns `{"status": "ok"}`.
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/telemetry/logs` | GET | Query logs (params: `sessionId`, `userId`, `limit`) |
+| `/api/telemetry/logs` | GET | Query logs (params: `sessionId`, `userId`, `conversationId`, `severityLevel`, `startTime`, `endTime`, `search`, `limit`, `offset`) |
 | `/api/telemetry/logs` | POST | Batch insert logs |
 | `/api/telemetry/logs/cleanup` | DELETE | Delete logs before a timestamp |
-| `/api/telemetry/trace/{traceId}` | GET | Get all logs for a trace |
+| `/api/telemetry/trace/{traceId}` | GET / DELETE | Get all logs for a trace, or delete the whole trace |
 | `/api/telemetry/session/{sessionId}` | GET | Get all logs for a session |
 | `/api/telemetry/conversations` | GET | Recent conversation summaries |
-| `/api/telemetry/stats` | GET | Aggregate statistics |
-| `/api/telemetry/analytics/*` | GET | Usage over time, heatmaps, latency, engagement, models |
+| `/api/telemetry/stats/overview` | GET | Aggregate counters used by the overview view |
+| `/api/telemetry/stats/usage` | GET | Requests and tokens bucketed over time |
+| `/api/telemetry/stats/models` | GET | Per-model usage breakdown |
+| `/api/telemetry/stats/latency` | GET | Latency distribution |
+| `/api/telemetry/stats/ttft` | GET | Time-to-first-token distribution for streamed responses |
+| `/api/telemetry/stats/heatmap` | GET | Peak-hour heatmap (day-of-week × hour) |
+| `/api/telemetry/stats/engagement` | GET | User engagement metrics (sessions, messages per user) |
+| `/api/telemetry/stats/errors` | GET | Error rate over time |
 | `/api/telemetry/search` | GET | Full-text search across message content |
+| `/api/telemetry/export` | GET | Export logs as CSV/JSON |
 
 ## Embeddable Chat Widget
 
@@ -214,7 +223,7 @@ The Rust backend doesn't care what's on the other side of `OPENAI_API_URL`, as l
 
 A few constraints are baked into the service because it talks to students, and I did not want them to be deployer-configurable:
 
-- The telemetry user ID is `SHA-256(IP + semester string)`. Change the semester string and yesterday's IDs cannot be joined to today's. That is also how the DBR cycles get cleanly separated.
+- The telemetry user ID is `SHA-256(IP || "|" || SEMESTER)`. The literal `|` is in there so a value like `1.2.3.4` + `WS` cannot collide with `1.2.3.` + `4WS`. Rotate the `SEMESTER` env var between teaching semesters and the new cohort gets a disjoint ID space; last semester's records cannot be joined to this one. That is also how the DBR cycles get cleanly separated. If `SEMESTER` is unset, the service logs a warning at startup and runs with an empty salt.
 - Raw IPs are never written to the database. They go into the hash above and into the rate limiter, and that is the end of them.
 - Sessions live in process memory. A restart wipes them; there is no persistent session store.
 - The telemetry layer is opt-in. Omit `DATABASE_URL` and the backend serves chat without writing anything to disk.

@@ -15,6 +15,7 @@ pub struct Config {
     pub dashboard_password_hash: String,
     pub http_client: Client,
     pub max_tokens: u32,
+    pub semester_salt: String,
 }
 
 impl Config {
@@ -54,6 +55,13 @@ impl Config {
 
         let db = Self::init_db().await;
 
+        let semester_salt = env::var("SEMESTER").unwrap_or_else(|_| {
+            tracing::warn!(
+                "SEMESTER not set — telemetry user IDs will not rotate between deployments"
+            );
+            String::new()
+        });
+
         let max_tokens: u32 = env::var("MAX_TOKENS")
             .unwrap_or_else(|_| "10000".to_string())
             .parse()
@@ -79,6 +87,7 @@ impl Config {
             dashboard_password_hash,
             http_client,
             max_tokens,
+            semester_salt,
         })
     }
 

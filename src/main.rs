@@ -41,16 +41,28 @@ async fn main() {
     let config = Config::from_env().await.unwrap();
     let shared_config = Arc::new(config.clone());
 
-    let cors = CorsLayer::new()
-        .allow_origin(
-            config
-                .allowed_origins
-                .iter()
-                .map(|origin| origin.parse().unwrap())
-                .collect::<Vec<_>>(),
-        )
-        .allow_methods([Method::POST, Method::OPTIONS])
-        .allow_headers(Any);
+    let cors = {
+        let base = CorsLayer::new()
+            .allow_methods([Method::POST, Method::OPTIONS])
+            .allow_headers(Any);
+        // "Any" or "*" in ALLOWED_ORIGINS opens CORS to any origin; otherwise
+        // each entry is parsed as a literal allowed Origin header value.
+        let wildcard = config
+            .allowed_origins
+            .iter()
+            .any(|o| o == "Any" || o == "*");
+        if wildcard {
+            base.allow_origin(Any)
+        } else {
+            base.allow_origin(
+                config
+                    .allowed_origins
+                    .iter()
+                    .map(|origin| origin.parse().unwrap())
+                    .collect::<Vec<_>>(),
+            )
+        }
+    };
 
     // In-memory session store — sessions lost on restart (you just log in again)
     let session_store = MemoryStore::default();
@@ -121,7 +133,7 @@ async fn chat_request_handler(
         .unwrap_or_else(|| format!("session-{}", uuid::Uuid::new_v4()));
 
     let client_ip = client_ip::resolve_client_ip(&headers, &addr);
-    let user_id = hash_user_id(client_ip);
+    let user_id = hash_user_id(client_ip, &config.semester_salt);
     let service_name = payload.model.clone();
 
     let mut context = TelemetryContext::new(session_id.clone())

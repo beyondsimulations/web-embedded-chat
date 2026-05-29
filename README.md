@@ -55,14 +55,14 @@ The prompt is only half the work. The model behind it matters at least as much: 
 
 ## Features
 
-- **OpenAI-compatible proxy** -- forwards chat requests to any API that speaks the OpenAI Chat Completions format
-- **Streaming** -- SSE streaming when the upstream supports it; non-streaming fallback otherwise
-- **Telemetry logging** -- every request/response pair is logged to PostgreSQL with trace IDs, latency, and token counts
-- **Telemetry dashboard** -- single-page app with overview stats, conversation browser, analytics (heatmaps, latency distribution, engagement metrics), full-text search, and data export
-- **Semester-scoped pseudonymous IDs** -- user IDs are SHA-256 hashes of (IP + semester); a new semester means new IDs, so prior cohorts cannot be joined to the current one
-- **Rate limiting** -- 50 req/min per IP on chat, 5 attempts/min on login
-- **Embeddable widget** -- `floating-chat.js` provides a drop-in chat UI with 40+ customization options, markdown, LaTeX, and code blocks
-- **Optional database** -- runs without PostgreSQL (telemetry silently disabled)
+- **OpenAI-compatible proxy** - forwards chat requests to any API that speaks the OpenAI Chat Completions format
+- **Streaming** - SSE streaming when the upstream supports it; non-streaming fallback otherwise
+- **Telemetry logging** - every request/response pair is logged to PostgreSQL with trace IDs, latency, and token counts
+- **Telemetry dashboard** - single-page app with overview stats, conversation browser, analytics (heatmaps, latency distribution, engagement metrics), full-text search, and data export
+- **Semester-scoped pseudonymous IDs** - user IDs are SHA-256 hashes of (IP + semester); a new semester means new IDs, so prior cohorts cannot be joined to the current one
+- **Rate limiting** - 50 req/min per IP on chat, 5 attempts/min on login
+- **Embeddable widget** - `floating-chat.js` provides a drop-in chat UI with 40+ customization options, markdown, LaTeX, and code blocks
+- **Optional database** - runs without PostgreSQL (telemetry silently disabled)
 
 ## Quick Start
 
@@ -76,7 +76,7 @@ docker-compose up --build
 
 This starts two services:
 - **Chatbot** at `http://localhost:3000` -- chat API + telemetry dashboard
-- **PostgreSQL** -- database for telemetry logs
+- **PostgreSQL** - database for telemetry logs
 
 Point `OPENAI_API_URL` at any OpenAI-compatible upstream (OpenAI, Groq, Together, vLLM, Ollama, ...).
 

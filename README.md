@@ -227,4 +227,4 @@ The Socratic side of the system draws on the standard typology of Socratic quest
 
 ## License
 
-MIT --- see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
